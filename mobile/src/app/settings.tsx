@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, useColorScheme } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, useColorScheme, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Slider from '@react-native-community/slider';
 import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
-import { Volume2, Gauge, Languages, Play } from 'lucide-react-native';
+import { Volume2, Gauge, Languages, Play, Mic2 } from 'lucide-react-native';
 import { GlassCard } from '@/components/GlassCard';
 import { AnimatedButton } from '@/components/AnimatedButton';
 import { useNarratorStore } from '@/lib/narrator-store';
@@ -26,10 +26,19 @@ const languages = [
   { label: 'Korean', value: 'ko-KR' },
 ];
 
+interface Voice {
+  identifier: string;
+  name: string;
+  quality: string;
+  language: string;
+}
+
 export default function SettingsScreen() {
   const colorScheme = useColorScheme();
   const voiceSettings = useNarratorStore((s) => s.voiceSettings);
   const setVoiceSettings = useNarratorStore((s) => s.setVoiceSettings);
+  const [availableVoices, setAvailableVoices] = useState<Voice[]>([]);
+  const [enhancedVoices, setEnhancedVoices] = useState<Voice[]>([]);
 
   const [fontsLoaded] = useFonts({
     PlayfairDisplay_700Bold,
@@ -37,11 +46,35 @@ export default function SettingsScreen() {
     Manrope_600SemiBold,
   });
 
+  useEffect(() => {
+    loadVoices();
+  }, []);
+
+  const loadVoices = async () => {
+    try {
+      const voices = await Speech.getAvailableVoicesAsync();
+      setAvailableVoices(voices);
+
+      // Filter for enhanced quality voices for better narration
+      const enhanced = voices.filter(v => v.quality === 'Enhanced');
+      setEnhancedVoices(enhanced);
+
+      // Auto-select first enhanced voice if none selected
+      if (!voiceSettings.voice && enhanced.length > 0) {
+        setVoiceSettings({ voice: enhanced[0].identifier });
+      }
+    } catch (error) {
+      console.error('Failed to load voices:', error);
+    }
+  };
+
   const testVoice = () => {
-    Speech.speak('This is a test of the narrator voice settings.', {
+    Speech.speak('Hello! This is how I will sound when reading your stories. The narrator uses natural pauses and intonation for a more human-like experience.', {
       language: voiceSettings.language,
       pitch: voiceSettings.pitch,
       rate: voiceSettings.rate,
+      volume: voiceSettings.volume,
+      voice: voiceSettings.voice,
     });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
@@ -54,6 +87,16 @@ export default function SettingsScreen() {
   const handleRateChange = (value: number) => {
     setVoiceSettings({ rate: value });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleVolumeChange = (value: number) => {
+    setVoiceSettings({ volume: value });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const selectVoice = (identifier: string) => {
+    setVoiceSettings({ voice: identifier });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
   if (!fontsLoaded) {
@@ -252,6 +295,140 @@ export default function SettingsScreen() {
               </Text>
             </View>
           </GlassCard>
+
+          <GlassCard className="p-6 mb-6">
+            <View className="flex-row items-center justify-between mb-4">
+              <View className="flex-row items-center">
+                <Volume2
+                  size={24}
+                  color={colorScheme === 'dark' ? '#fff' : '#000'}
+                />
+                <Text
+                  style={{ fontFamily: 'Manrope_600SemiBold' }}
+                  className={cn(
+                    'text-lg ml-3',
+                    colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
+                  )}
+                >
+                  Volume
+                </Text>
+              </View>
+              <Text
+                style={{ fontFamily: 'Manrope_600SemiBold' }}
+                className={cn(
+                  'text-base',
+                  colorScheme === 'dark' ? 'text-white/80' : 'text-slate-700'
+                )}
+              >
+                {Math.round(voiceSettings.volume * 100)}%
+              </Text>
+            </View>
+
+            <Slider
+              value={voiceSettings.volume}
+              onValueChange={handleVolumeChange}
+              minimumValue={0.0}
+              maximumValue={1.0}
+              step={0.1}
+              minimumTrackTintColor="#8b5cf6"
+              maximumTrackTintColor={colorScheme === 'dark' ? '#333' : '#ddd'}
+              thumbTintColor="#8b5cf6"
+            />
+
+            <View className="flex-row justify-between mt-2">
+              <Text
+                style={{ fontFamily: 'Manrope_400Regular' }}
+                className={cn(
+                  'text-xs',
+                  colorScheme === 'dark' ? 'text-white/40' : 'text-slate-500'
+                )}
+              >
+                Quiet
+              </Text>
+              <Text
+                style={{ fontFamily: 'Manrope_400Regular' }}
+                className={cn(
+                  'text-xs',
+                  colorScheme === 'dark' ? 'text-white/40' : 'text-slate-500'
+                )}
+              >
+                Loud
+              </Text>
+            </View>
+          </GlassCard>
+
+          {enhancedVoices.length > 0 && (
+            <GlassCard className="p-6 mb-6">
+              <View className="flex-row items-center mb-4">
+                <Mic2
+                  size={24}
+                  color={colorScheme === 'dark' ? '#fff' : '#000'}
+                />
+                <Text
+                  style={{ fontFamily: 'Manrope_600SemiBold' }}
+                  className={cn(
+                    'text-lg ml-3',
+                    colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
+                  )}
+                >
+                  Voice Selection
+                </Text>
+              </View>
+
+              <Text
+                style={{ fontFamily: 'Manrope_400Regular' }}
+                className={cn(
+                  'text-sm mb-3',
+                  colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
+                )}
+              >
+                Enhanced quality voices for natural narration
+              </Text>
+
+              <ScrollView
+                style={{ maxHeight: 200 }}
+                showsVerticalScrollIndicator={false}
+              >
+                {enhancedVoices.map((voice) => (
+                  <Pressable
+                    key={voice.identifier}
+                    onPress={() => selectVoice(voice.identifier)}
+                    className={cn(
+                      'p-3 rounded-xl mb-2',
+                      voiceSettings.voice === voice.identifier
+                        ? 'bg-purple-500/20 border-2 border-purple-500'
+                        : colorScheme === 'dark'
+                        ? 'bg-white/5'
+                        : 'bg-black/5'
+                    )}
+                  >
+                    <Text
+                      style={{ fontFamily: 'Manrope_600SemiBold' }}
+                      className={cn(
+                        'text-base mb-1',
+                        voiceSettings.voice === voice.identifier
+                          ? 'text-purple-400'
+                          : colorScheme === 'dark'
+                          ? 'text-white'
+                          : 'text-slate-900'
+                      )}
+                    >
+                      {voice.name}
+                    </Text>
+                    <Text
+                      style={{ fontFamily: 'Manrope_400Regular' }}
+                      className={cn(
+                        'text-xs',
+                        colorScheme === 'dark' ? 'text-white/50' : 'text-slate-500'
+                      )}
+                    >
+                      {voice.language} • Enhanced Quality
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </GlassCard>
+          )}
 
           <AnimatedButton
             title="Test Voice"

@@ -17,6 +17,8 @@ export interface VoiceSettings {
   language: string;
   pitch: number;
   rate: number;
+  volume: number;
+  voice?: string; // Voice identifier for native voice selection
 }
 
 export interface RecordingState {

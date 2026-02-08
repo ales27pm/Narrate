@@ -65,6 +65,38 @@ export default function NarratorScreen() {
     transform: [{ scale: contentScale.value }],
   }));
 
+  // Helper to break text into natural speech segments
+  const createSpeechSegments = (fullText: string) => {
+    // Split by sentence-ending punctuation but keep the punctuation
+    const sentencePattern = /([^.!?]+[.!?]+)/g;
+    const sentences = fullText.match(sentencePattern) || [fullText];
+
+    const segments: Array<{ text: string; wordCount: number; pauseAfter: number }> = [];
+
+    sentences.forEach((sentence) => {
+      const trimmed = sentence.trim();
+      if (!trimmed) return;
+
+      const sentenceWords = trimmed.split(/\s+/);
+
+      // Determine pause duration based on punctuation
+      let pauseMs = 0;
+      if (trimmed.endsWith('.') || trimmed.endsWith('!') || trimmed.endsWith('?')) {
+        pauseMs = 400; // Natural pause at sentence end
+      } else if (trimmed.includes(',') || trimmed.includes(';') || trimmed.includes(':')) {
+        pauseMs = 250; // Shorter pause for commas
+      }
+
+      segments.push({
+        text: trimmed,
+        wordCount: sentenceWords.length,
+        pauseAfter: pauseMs,
+      });
+    });
+
+    return segments;
+  };
+
   const startNarration = async () => {
     if (!text.trim()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -80,35 +112,57 @@ export default function NarratorScreen() {
     setOriginalBrightness(currentBrightness);
     await Brightness.setBrightnessAsync(0.8);
 
-    // Calculate word timing for smooth highlighting
-    const wordsPerMinute = voiceSettings.rate * 150; // Average speaking rate
+    const segments = createSpeechSegments(text);
+    const wordsPerMinute = voiceSettings.rate * 150;
     const millisecondsPerWord = (60 / wordsPerMinute) * 1000;
 
-    // Start speaking the entire text
-    Speech.speak(text, {
-      language: voiceSettings.language,
-      pitch: voiceSettings.pitch,
-      rate: voiceSettings.rate,
-      onDone: () => {
-        stopNarration();
-      },
-      onError: () => {
-        stopNarration();
-      },
-    });
+    let currentWordIndex = 0;
+    let segmentIndex = 0;
 
-    // Highlight words as speech progresses
-    let currentIndex = 0;
+    // Start highlighting words
     highlightIntervalRef.current = setInterval(() => {
-      if (currentIndex < words.length) {
-        setHighlightedIndex(currentIndex);
-        currentIndex++;
+      if (currentWordIndex < words.length) {
+        setHighlightedIndex(currentWordIndex);
+        currentWordIndex++;
       } else {
         if (highlightIntervalRef.current) {
           clearInterval(highlightIntervalRef.current);
         }
       }
     }, millisecondsPerWord);
+
+    // Speak segments sequentially with natural pauses
+    const speakNextSegment = () => {
+      if (segmentIndex >= segments.length) {
+        stopNarration();
+        return;
+      }
+
+      const segment = segments[segmentIndex];
+
+      Speech.speak(segment.text, {
+        language: voiceSettings.language,
+        pitch: voiceSettings.pitch,
+        rate: voiceSettings.rate,
+        volume: voiceSettings.volume,
+        voice: voiceSettings.voice,
+        // Enhanced voice quality options
+        onDone: () => {
+          segmentIndex++;
+          // Add natural pause before next segment
+          if (segment.pauseAfter > 0 && segmentIndex < segments.length) {
+            setTimeout(speakNextSegment, segment.pauseAfter);
+          } else {
+            speakNextSegment();
+          }
+        },
+        onError: () => {
+          stopNarration();
+        },
+      });
+    };
+
+    speakNextSegment();
   };
 
   const pauseNarration = () => {
