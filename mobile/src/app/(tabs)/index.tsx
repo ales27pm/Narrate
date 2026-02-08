@@ -407,7 +407,7 @@ export default function NarratorScreen() {
                       lineHeight: 24,
                     }}
                   >
-                    {words.map((word, index) => (
+                    {words.slice(0, highlightedIndex + 1).map((word, index) => (
                       <Text
                         key={index}
                         style={{
