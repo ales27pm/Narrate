@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, ScrollView, Pressable, useColorScheme } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Speech from 'expo-speech';
@@ -31,6 +31,7 @@ export default function NarratorScreen() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [originalBrightness, setOriginalBrightness] = useState<number | null>(null);
   const words = text.split(/\s+/).filter(Boolean);
+  const highlightIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const voiceSettings = useNarratorStore((s) => s.voiceSettings);
   const addStory = useNarratorStore((s) => s.addStory);
@@ -79,38 +80,52 @@ export default function NarratorScreen() {
     setOriginalBrightness(currentBrightness);
     await Brightness.setBrightnessAsync(0.8);
 
-    let currentIndex = 0;
-    const speakWord = () => {
-      if (currentIndex >= words.length) {
+    // Calculate word timing for smooth highlighting
+    const wordsPerMinute = voiceSettings.rate * 150; // Average speaking rate
+    const millisecondsPerWord = (60 / wordsPerMinute) * 1000;
+
+    // Start speaking the entire text
+    Speech.speak(text, {
+      language: voiceSettings.language,
+      pitch: voiceSettings.pitch,
+      rate: voiceSettings.rate,
+      onDone: () => {
         stopNarration();
-        return;
+      },
+      onError: () => {
+        stopNarration();
+      },
+    });
+
+    // Highlight words as speech progresses
+    let currentIndex = 0;
+    highlightIntervalRef.current = setInterval(() => {
+      if (currentIndex < words.length) {
+        setHighlightedIndex(currentIndex);
+        currentIndex++;
+      } else {
+        if (highlightIntervalRef.current) {
+          clearInterval(highlightIntervalRef.current);
+        }
       }
-
-      setHighlightedIndex(currentIndex);
-      Speech.speak(words[currentIndex], {
-        language: voiceSettings.language,
-        pitch: voiceSettings.pitch,
-        rate: voiceSettings.rate,
-        onDone: () => {
-          currentIndex++;
-          speakWord();
-        },
-        onError: () => {
-          stopNarration();
-        },
-      });
-    };
-
-    speakWord();
+    }, millisecondsPerWord);
   };
 
   const pauseNarration = () => {
     Speech.pause();
+    if (highlightIntervalRef.current) {
+      clearInterval(highlightIntervalRef.current);
+      highlightIntervalRef.current = null;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
   const stopNarration = async () => {
     Speech.stop();
+    if (highlightIntervalRef.current) {
+      clearInterval(highlightIntervalRef.current);
+      highlightIntervalRef.current = null;
+    }
     setIsSpeaking(false);
     setHighlightedIndex(-1);
     titleOpacity.value = withSpring(1);
