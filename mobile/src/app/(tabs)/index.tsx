@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, ScrollView, Pressable, useColorScheme } from 'react-native';
+import { View, Text, TextInput, ScrollView, Pressable, useColorScheme, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as Brightness from 'expo-brightness';
-import { Play, Pause, Square, Settings, Bookmark, Mic } from 'lucide-react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import { Play, Pause, Square, Settings, Bookmark, Mic, Upload } from 'lucide-react-native';
 import { GlassCard } from '@/components/GlassCard';
 import { AnimatedButton } from '@/components/AnimatedButton';
 import { WaveformVisualizer } from '@/components/WaveformVisualizer';
@@ -209,6 +211,96 @@ export default function NarratorScreen() {
     router.push('/library');
   };
 
+  const importDocument = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          'text/plain', // .txt
+          'application/pdf', // .pdf
+          'application/msword', // .doc
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+          'application/rtf', // .rtf
+        ],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const file = result.assets[0];
+      const fileUri = file.uri;
+      const mimeType = file.mimeType;
+
+      // Extract text based on file type
+      let extractedText = '';
+
+      if (mimeType === 'text/plain' || file.name.endsWith('.txt')) {
+        // Read plain text files directly
+        extractedText = await FileSystem.readAsStringAsync(fileUri);
+      } else if (mimeType === 'application/pdf' || file.name.endsWith('.pdf')) {
+        // For PDFs, show info message
+        Alert.alert(
+          'PDF Import',
+          'PDF text extraction requires additional setup. For now, please copy and paste text from your PDF, or convert it to a TXT file first.\n\nFull PDF support coming soon!',
+          [{ text: 'OK' }]
+        );
+        return;
+      } else if (
+        mimeType === 'application/msword' ||
+        mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+        file.name.endsWith('.doc') ||
+        file.name.endsWith('.docx')
+      ) {
+        // For Word docs, show info message
+        Alert.alert(
+          'Word Document Import',
+          'Word document import requires additional setup. For now, please copy and paste text from your document, or save it as a TXT file first.\n\nFull DOC/DOCX support coming soon!',
+          [{ text: 'OK' }]
+        );
+        return;
+      } else if (mimeType === 'application/rtf' || file.name.endsWith('.rtf')) {
+        // Try reading RTF as plain text (basic support)
+        const content = await FileSystem.readAsStringAsync(fileUri);
+        // Basic RTF stripping (removes most RTF formatting)
+        extractedText = content
+          .replace(/\\[a-z]+\d*\s?/gi, '') // Remove RTF commands
+          .replace(/[{}]/g, '') // Remove braces
+          .replace(/\\\\/g, '\\') // Handle escaped backslashes
+          .trim();
+      } else {
+        // Try reading as plain text for other formats
+        try {
+          extractedText = await FileSystem.readAsStringAsync(fileUri);
+        } catch (error) {
+          Alert.alert(
+            'Unsupported Format',
+            'This file format is not supported. Please use TXT files for best results.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+      }
+
+      if (extractedText.trim()) {
+        setText(extractedText.trim());
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Alert.alert('Empty File', 'No text could be extracted from this file.', [
+          { text: 'OK' },
+        ]);
+      }
+    } catch (error) {
+      console.error('Document import error:', error);
+      Alert.alert('Import Failed', 'Could not import the document. Please try again.', [
+        { text: 'OK' },
+      ]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  };
+
   if (!fontsLoaded) {
     return null;
   }
@@ -281,21 +373,31 @@ export default function NarratorScreen() {
               </View>
 
               {!isSpeaking ? (
-                <TextInput
-                  value={text}
-                  onChangeText={setText}
-                  placeholder="Enter your text here..."
-                  placeholderTextColor={colorScheme === 'dark' ? '#666' : '#999'}
-                  multiline
-                  style={{
-                    fontFamily: 'Manrope_400Regular',
-                    minHeight: 200,
-                    color: colorScheme === 'dark' ? '#fff' : '#000',
-                    fontSize: 16,
-                    lineHeight: 24,
-                  }}
-                  className="mb-4"
-                />
+                <>
+                  <TextInput
+                    value={text}
+                    onChangeText={setText}
+                    placeholder="Enter your text here or import a document..."
+                    placeholderTextColor={colorScheme === 'dark' ? '#666' : '#999'}
+                    multiline
+                    style={{
+                      fontFamily: 'Manrope_400Regular',
+                      minHeight: 200,
+                      color: colorScheme === 'dark' ? '#fff' : '#000',
+                      fontSize: 16,
+                      lineHeight: 24,
+                    }}
+                    className="mb-4"
+                  />
+
+                  <AnimatedButton
+                    title="Import Document"
+                    variant="ghost"
+                    icon={<Upload size={18} color={colorScheme === 'dark' ? '#fff' : '#000'} />}
+                    onPress={importDocument}
+                    size="sm"
+                  />
+                </>
               ) : (
                 <View className="min-h-[200px] mb-4">
                   <Text
