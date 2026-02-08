@@ -32,6 +32,7 @@ export default function NarratorScreen() {
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [originalBrightness, setOriginalBrightness] = useState<number | null>(null);
+  const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
   const words = text.split(/\s+/).filter(Boolean);
   const highlightIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -107,6 +108,8 @@ export default function NarratorScreen() {
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsSpeaking(true);
+    setCurrentSentenceIndex(0);
+    setHighlightedIndex(0);
     titleOpacity.value = withTiming(0.3, { duration: 300 });
 
     await activateKeepAwakeAsync();
@@ -118,20 +121,7 @@ export default function NarratorScreen() {
     const wordsPerMinute = voiceSettings.rate * 150;
     const millisecondsPerWord = (60 / wordsPerMinute) * 1000;
 
-    let currentWordIndex = 0;
     let segmentIndex = 0;
-
-    // Start highlighting words
-    highlightIntervalRef.current = setInterval(() => {
-      if (currentWordIndex < words.length) {
-        setHighlightedIndex(currentWordIndex);
-        currentWordIndex++;
-      } else {
-        if (highlightIntervalRef.current) {
-          clearInterval(highlightIntervalRef.current);
-        }
-      }
-    }, millisecondsPerWord);
 
     // Speak segments sequentially with natural pauses
     const speakNextSegment = () => {
@@ -141,6 +131,23 @@ export default function NarratorScreen() {
       }
 
       const segment = segments[segmentIndex];
+      const sentenceWords = segment.text.split(/\s+/).filter(Boolean);
+      let wordIndex = 0;
+
+      setCurrentSentenceIndex(segmentIndex);
+      setHighlightedIndex(0);
+
+      // Highlight words in current sentence
+      if (highlightIntervalRef.current) {
+        clearInterval(highlightIntervalRef.current);
+      }
+
+      highlightIntervalRef.current = setInterval(() => {
+        if (wordIndex < sentenceWords.length) {
+          setHighlightedIndex(wordIndex);
+          wordIndex++;
+        }
+      }, millisecondsPerWord);
 
       Speech.speak(segment.text, {
         language: voiceSettings.language,
@@ -148,8 +155,10 @@ export default function NarratorScreen() {
         rate: voiceSettings.rate,
         volume: voiceSettings.volume,
         voice: voiceSettings.voice,
-        // Enhanced voice quality options
         onDone: () => {
+          if (highlightIntervalRef.current) {
+            clearInterval(highlightIntervalRef.current);
+          }
           segmentIndex++;
           // Add natural pause before next segment
           if (segment.pauseAfter > 0 && segmentIndex < segments.length) {
@@ -399,34 +408,44 @@ export default function NarratorScreen() {
                   />
                 </>
               ) : (
-                <View className="min-h-[200px] mb-4">
+                <View className="min-h-[200px] mb-4 justify-center">
                   <Text
                     style={{
                       fontFamily: 'Manrope_400Regular',
-                      fontSize: 16,
-                      lineHeight: 24,
+                      fontSize: 18,
+                      lineHeight: 28,
+                      textAlign: 'center',
                     }}
                   >
-                    {words.slice(0, highlightedIndex + 1).map((word, index) => (
-                      <Text
-                        key={index}
-                        style={{
-                          color:
-                            index === highlightedIndex
-                              ? '#8b5cf6'
-                              : colorScheme === 'dark'
-                              ? '#fff'
-                              : '#000',
-                          backgroundColor:
-                            index === highlightedIndex
-                              ? 'rgba(139, 92, 246, 0.2)'
-                              : 'transparent',
-                          fontFamily: 'Manrope_400Regular',
-                        }}
-                      >
-                        {word}{' '}
-                      </Text>
-                    ))}
+                    {(() => {
+                      const segments = createSpeechSegments(text);
+                      if (currentSentenceIndex < segments.length) {
+                        const currentSentence = segments[currentSentenceIndex].text;
+                        const sentenceWords = currentSentence.split(/\s+/).filter(Boolean);
+
+                        return sentenceWords.map((word, index) => (
+                          <Text
+                            key={index}
+                            style={{
+                              color:
+                                index === highlightedIndex
+                                  ? '#8b5cf6'
+                                  : colorScheme === 'dark'
+                                  ? '#fff'
+                                  : '#000',
+                              backgroundColor:
+                                index === highlightedIndex
+                                  ? 'rgba(139, 92, 246, 0.2)'
+                                  : 'transparent',
+                              fontFamily: 'Manrope_400Regular',
+                            }}
+                          >
+                            {word}{' '}
+                          </Text>
+                        ));
+                      }
+                      return null;
+                    })()}
                   </Text>
                 </View>
               )}
