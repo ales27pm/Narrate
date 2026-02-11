@@ -13,7 +13,6 @@ export interface ContentExtractionSettings {
   ocrLanguage: string;
   clipboardMonitoring: boolean;
   autoFetchURL: boolean;
-  preferredExtractionMethod: 'backend' | 'client';
 }
 
 interface NarratorStore {
@@ -94,7 +93,6 @@ export const useNarratorStore = create<NarratorStore>((set, get) => ({
     ocrLanguage: 'en',
     clipboardMonitoring: false,
     autoFetchURL: true,
-    preferredExtractionMethod: 'backend',
   },
 
   addStory: (story) => {

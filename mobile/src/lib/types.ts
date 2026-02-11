@@ -39,7 +39,7 @@ export interface VoiceSettings {
   personality?: VoicePersonality;
   ttsProvider: TTSProvider;
   premiumVoiceId?: string; // For premium TTS providers
-  apiKey?: string; // For premium TTS providers (optional, can use backend)
+  apiKey?: string; // For future premium TTS providers (not used in on-device version)
 }
 
 export interface RecordingState {

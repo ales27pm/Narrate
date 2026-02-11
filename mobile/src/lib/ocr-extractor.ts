@@ -1,9 +1,8 @@
 /**
  * OCR and Advanced Content Extraction Utility
- * Handles image text extraction, PDF parsing, and enhanced web content extraction
+ * Note: OCR and PDF extraction features are not available in the on-device version
+ * These features require a backend server for processing
  */
-
-import * as FileSystem from 'expo-file-system';
 
 export interface ExtractionResult {
   text: string;
@@ -79,161 +78,36 @@ export function calculateReadingTime(wordCount: number, wordsPerMinute: number =
 }
 
 /**
- * Extract text from image using backend OCR service
+ * Extract text from image - NOT AVAILABLE in on-device version
+ * This feature requires a backend server for OCR processing
  */
 export async function extractTextFromImage(
   imageUri: string,
   isScreenshot: boolean = false
 ): Promise<ExtractionResult> {
-  try {
-    const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
-
-    if (!backendUrl) {
-      throw new Error('Backend URL not configured');
-    }
-
-    // Read image file as base64
-    const base64 = await FileSystem.readAsStringAsync(imageUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    // Send to backend for OCR processing
-    const response = await fetch(`${backendUrl}/api/ocr/extract`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        image: base64,
-        isScreenshot,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`OCR service error: ${response.status}`);
-    }
-
-    const result = await response.json();
-    const text = result.data.text;
-    const wordCount = text.split(/\s+/).filter(Boolean).length;
-
-    return {
-      text,
-      title: isScreenshot ? 'Screenshot Text' : 'Extracted Text',
-      metadata: {
-        sourceType: isScreenshot ? 'screenshot' : 'image',
-        wordCount,
-        estimatedReadingTime: calculateReadingTime(wordCount),
-        language: detectLanguage(text),
-        confidence: result.data.confidence,
-      },
-    };
-  } catch (error) {
-    console.error('OCR extraction error:', error);
-    throw new Error(
-      'OCR service unavailable. Please ensure the backend is running and try again.'
-    );
-  }
+  throw new Error(
+    'OCR feature is not available in the on-device version. This feature requires a backend server for image text extraction.'
+  );
 }
 
 /**
- * Extract text from PDF using backend PDF parser
+ * Extract text from PDF - NOT AVAILABLE in on-device version
+ * This feature requires a backend server for PDF text extraction
  */
 export async function extractTextFromPDF(pdfUri: string): Promise<ExtractionResult> {
-  try {
-    const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
-
-    if (!backendUrl) {
-      throw new Error('Backend URL not configured');
-    }
-
-    // Read PDF file as base64
-    const base64 = await FileSystem.readAsStringAsync(pdfUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    // Send to backend for PDF text extraction
-    const response = await fetch(`${backendUrl}/api/pdf/extract`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        pdf: base64,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`PDF extraction error: ${response.status}`);
-    }
-
-    const result = await response.json();
-    const text = result.data.text;
-    const wordCount = text.split(/\s+/).filter(Boolean).length;
-
-    return {
-      text,
-      title: result.data.title || 'PDF Document',
-      metadata: {
-        sourceType: 'pdf',
-        wordCount,
-        estimatedReadingTime: calculateReadingTime(wordCount),
-        language: detectLanguage(text),
-        pageCount: result.data.pageCount,
-      },
-    };
-  } catch (error) {
-    console.error('PDF extraction error:', error);
-    throw new Error(
-      'PDF extraction service unavailable. Please ensure the backend is running and try again.'
-    );
-  }
+  throw new Error(
+    'PDF extraction is not available in the on-device version. This feature requires a backend server for PDF text extraction. Please use plain text (.txt) files instead.'
+  );
 }
 
 /**
- * Enhanced HTML/Web content extraction with readability algorithm
+ * Enhanced HTML/Web content extraction - NOT AVAILABLE in on-device version
+ * This feature requires a backend server. Use the basic client-side extraction instead.
  */
 export async function extractTextFromWebEnhanced(url: string): Promise<ExtractionResult> {
-  try {
-    const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
-
-    if (!backendUrl) {
-      // Fallback to client-side extraction if backend not available
-      throw new Error('Backend URL not configured');
-    }
-
-    // Use backend for better content extraction with Readability algorithm
-    const response = await fetch(`${backendUrl}/api/web/extract`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ url }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Web extraction error: ${response.status}`);
-    }
-
-    const result = await response.json();
-    const text = result.data.text;
-    const wordCount = text.split(/\s+/).filter(Boolean).length;
-
-    return {
-      text,
-      title: result.data.title || 'Web Article',
-      metadata: {
-        sourceType: 'web',
-        wordCount,
-        estimatedReadingTime: calculateReadingTime(wordCount),
-        language: detectLanguage(text),
-      },
-    };
-  } catch (error) {
-    console.error('Enhanced web extraction error:', error);
-    // Return null to trigger fallback to client-side extraction
-    throw error;
-  }
+  throw new Error(
+    'Enhanced web extraction is not available. The app will use basic client-side extraction instead.'
+  );
 }
 
 /**

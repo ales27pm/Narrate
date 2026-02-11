@@ -17,9 +17,6 @@ import { useNarratorStore } from '@/lib/narrator-store';
 import { isURL, fetchContentFromURL, validateURL } from '@/lib/content-fetcher';
 import { useClipboardMonitor } from '@/lib/useClipboardMonitor';
 import {
-  extractTextFromImage,
-  extractTextFromPDF,
-  extractTextFromWebEnhanced,
   isLikelyScreenshot,
   type ExtractionResult,
 } from '@/lib/ocr-extractor';
@@ -330,13 +327,7 @@ export default function NarratorScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
       const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'text/plain', // .txt
-          'application/pdf', // .pdf
-          'application/msword', // .doc
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
-          'application/rtf', // .rtf
-        ],
+        type: ['text/plain'], // Only support .txt files in on-device version
         copyToCacheDirectory: true,
       });
 
@@ -346,68 +337,9 @@ export default function NarratorScreen() {
 
       const file = result.assets[0];
       const fileUri = file.uri;
-      const mimeType = file.mimeType;
 
-      // Extract text based on file type
-      let extractedText = '';
-
-      if (mimeType === 'text/plain' || file.name.endsWith('.txt')) {
-        // Read plain text files directly
-        extractedText = await FileSystem.readAsStringAsync(fileUri);
-      } else if (mimeType === 'application/pdf' || file.name.endsWith('.pdf')) {
-        // For PDFs, use backend extraction
-        setIsExtracting(true);
-        try {
-          const result = await extractTextFromPDF(fileUri);
-          setExtractionPreview(result);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        } catch (error) {
-          console.error('PDF extraction error:', error);
-          Alert.alert(
-            'PDF Extraction Failed',
-            error instanceof Error ? error.message : 'Could not extract text from PDF. Please try again.',
-            [{ text: 'OK' }]
-          );
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        } finally {
-          setIsExtracting(false);
-        }
-        return;
-      } else if (
-        mimeType === 'application/msword' ||
-        mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-        file.name.endsWith('.doc') ||
-        file.name.endsWith('.docx')
-      ) {
-        // For Word docs, show info message
-        Alert.alert(
-          'Word Document Import',
-          'Word document import requires additional setup. For now, please copy and paste text from your document, or save it as a TXT file first.\n\nFull DOC/DOCX support coming soon!',
-          [{ text: 'OK' }]
-        );
-        return;
-      } else if (mimeType === 'application/rtf' || file.name.endsWith('.rtf')) {
-        // Try reading RTF as plain text (basic support)
-        const content = await FileSystem.readAsStringAsync(fileUri);
-        // Basic RTF stripping (removes most RTF formatting)
-        extractedText = content
-          .replace(/\\[a-z]+\d*\s?/gi, '') // Remove RTF commands
-          .replace(/[{}]/g, '') // Remove braces
-          .replace(/\\\\/g, '\\') // Handle escaped backslashes
-          .trim();
-      } else {
-        // Try reading as plain text for other formats
-        try {
-          extractedText = await FileSystem.readAsStringAsync(fileUri);
-        } catch (error) {
-          Alert.alert(
-            'Unsupported Format',
-            'This file format is not supported. Please use TXT files for best results.',
-            [{ text: 'OK' }]
-          );
-          return;
-        }
-      }
+      // Read plain text files directly
+      const extractedText = await FileSystem.readAsStringAsync(fileUri);
 
       if (extractedText.trim()) {
         setText(extractedText.trim());
@@ -427,112 +359,24 @@ export default function NarratorScreen() {
     }
   };
 
+  // OCR feature not available in on-device version
   const importFromCamera = async () => {
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(
-          'Camera Permission Required',
-          'Please grant camera permission to scan images.',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
-        quality: 1,
-        allowsEditing: false,
-      });
-
-      if (result.canceled) {
-        return;
-      }
-
-      const imageUri = result.assets[0].uri;
-      const width = result.assets[0].width || 0;
-      const height = result.assets[0].height || 0;
-      const isScreenshot = isLikelyScreenshot(width, height);
-
-      setIsExtracting(true);
-      try {
-        const extractionResult = await extractTextFromImage(imageUri, isScreenshot);
-        setExtractionPreview(extractionResult);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch (error) {
-        console.error('OCR extraction error:', error);
-        Alert.alert(
-          'Text Extraction Failed',
-          error instanceof Error ? error.message : 'Could not extract text from image. Please try again.',
-          [{ text: 'OK' }]
-        );
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      } finally {
-        setIsExtracting(false);
-      }
-    } catch (error) {
-      console.error('Camera error:', error);
-      Alert.alert('Camera Failed', 'Could not open camera. Please try again.', [
-        { text: 'OK' },
-      ]);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      'Feature Not Available',
+      'OCR (text extraction from images) is not available in the on-device version. This feature requires a backend server for image processing.\n\nYou can still paste text or import .txt files.',
+      [{ text: 'OK' }]
+    );
   };
 
+  // OCR feature not available in on-device version
   const importFromGallery = async () => {
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(
-          'Gallery Permission Required',
-          'Please grant gallery permission to select images.',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 1,
-        allowsEditing: false,
-      });
-
-      if (result.canceled) {
-        return;
-      }
-
-      const imageUri = result.assets[0].uri;
-      const width = result.assets[0].width || 0;
-      const height = result.assets[0].height || 0;
-      const isScreenshot = isLikelyScreenshot(width, height);
-
-      setIsExtracting(true);
-      try {
-        const extractionResult = await extractTextFromImage(imageUri, isScreenshot);
-        setExtractionPreview(extractionResult);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch (error) {
-        console.error('OCR extraction error:', error);
-        Alert.alert(
-          'Text Extraction Failed',
-          error instanceof Error ? error.message : 'Could not extract text from image. Please try again.',
-          [{ text: 'OK' }]
-        );
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      } finally {
-        setIsExtracting(false);
-      }
-    } catch (error) {
-      console.error('Gallery error:', error);
-      Alert.alert('Gallery Failed', 'Could not open gallery. Please try again.', [
-        { text: 'OK' },
-      ]);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      'Feature Not Available',
+      'OCR (text extraction from images) is not available in the on-device version. This feature requires a backend server for image processing.\n\nYou can still paste text or import .txt files.',
+      [{ text: 'OK' }]
+    );
   };
 
   const handlePreviewNarrate = () => {
@@ -587,18 +431,7 @@ export default function NarratorScreen() {
       setIsFetchingURL(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-      // Try enhanced extraction first if backend is available
-      try {
-        const result = await extractTextFromWebEnhanced(url);
-        setExtractionPreview(result);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        return;
-      } catch (enhancedError) {
-        console.log('Enhanced extraction failed, falling back to client-side:', enhancedError);
-        // Fallback to client-side extraction
-      }
-
-      // Fallback to original client-side extraction
+      // Use client-side extraction only (no backend required)
       const content = await fetchContentFromURL(url);
 
       // Only update if the URL field hasn't changed
