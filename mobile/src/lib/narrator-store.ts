@@ -9,6 +9,13 @@ export interface SharedContentData {
   timestamp: number;
 }
 
+export interface ContentExtractionSettings {
+  ocrLanguage: string;
+  clipboardMonitoring: boolean;
+  autoFetchURL: boolean;
+  preferredExtractionMethod: 'backend' | 'client';
+}
+
 interface NarratorStore {
   stories: Story[];
   currentStory: Story | null;
@@ -16,6 +23,7 @@ interface NarratorStore {
   narrationState: NarrationState;
   recordingState: RecordingState;
   sharedContent: SharedContentData | null;
+  extractionSettings: ContentExtractionSettings;
 
   // Story management
   addStory: (story: Omit<Story, 'id' | 'createdAt' | 'updatedAt'>) => void;
@@ -39,9 +47,14 @@ interface NarratorStore {
   setSharedContent: (content: SharedContentData | null) => void;
   clearSharedContent: () => void;
 
+  // Extraction settings
+  setExtractionSettings: (settings: Partial<ContentExtractionSettings>) => void;
+
   // Persistence
   loadStories: () => Promise<void>;
   saveStories: () => Promise<void>;
+  loadSettings: () => Promise<void>;
+  saveSettings: () => Promise<void>;
 }
 
 export const useNarratorStore = create<NarratorStore>((set, get) => ({
@@ -66,6 +79,12 @@ export const useNarratorStore = create<NarratorStore>((set, get) => ({
     duration: 0,
   },
   sharedContent: null,
+  extractionSettings: {
+    ocrLanguage: 'en',
+    clipboardMonitoring: false,
+    autoFetchURL: true,
+    preferredExtractionMethod: 'backend',
+  },
 
   addStory: (story) => {
     const newStory: Story = {
@@ -106,8 +125,10 @@ export const useNarratorStore = create<NarratorStore>((set, get) => ({
 
   setCurrentStory: (story) => set({ currentStory: story }),
 
-  setVoiceSettings: (settings) =>
-    set((state) => ({ voiceSettings: { ...state.voiceSettings, ...settings } })),
+  setVoiceSettings: (settings) => {
+    set((state) => ({ voiceSettings: { ...state.voiceSettings, ...settings } }));
+    get().saveSettings();
+  },
 
   setNarrationState: (state) =>
     set((prev) => ({ narrationState: { ...prev.narrationState, ...state } })),
@@ -139,6 +160,13 @@ export const useNarratorStore = create<NarratorStore>((set, get) => ({
 
   clearSharedContent: () => set({ sharedContent: null }),
 
+  setExtractionSettings: (settings) => {
+    set((state) => ({
+      extractionSettings: { ...state.extractionSettings, ...settings },
+    }));
+    get().saveSettings();
+  },
+
   loadStories: async () => {
     try {
       const stored = await AsyncStorage.getItem('narrator-stories');
@@ -157,6 +185,33 @@ export const useNarratorStore = create<NarratorStore>((set, get) => ({
       await AsyncStorage.setItem('narrator-stories', JSON.stringify(stories));
     } catch (error) {
       console.error('Failed to save stories:', error);
+    }
+  },
+
+  loadSettings: async () => {
+    try {
+      const stored = await AsyncStorage.getItem('narrator-settings');
+      if (stored) {
+        const settings = JSON.parse(stored);
+        set({
+          voiceSettings: settings.voiceSettings || get().voiceSettings,
+          extractionSettings: settings.extractionSettings || get().extractionSettings,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+    }
+  },
+
+  saveSettings: async () => {
+    try {
+      const { voiceSettings, extractionSettings } = get();
+      await AsyncStorage.setItem(
+        'narrator-settings',
+        JSON.stringify({ voiceSettings, extractionSettings })
+      );
+    } catch (error) {
+      console.error('Failed to save settings:', error);
     }
   },
 }));

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, useColorScheme, Pressable } from 'react-native';
+import { View, Text, ScrollView, useColorScheme, Pressable, Switch } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Slider from '@react-native-community/slider';
 import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
-import { Volume2, Gauge, Languages, Play, Mic2 } from 'lucide-react-native';
+import { Volume2, Gauge, Languages, Play, Mic2, Clipboard, Globe as GlobeIcon } from 'lucide-react-native';
 import { GlassCard } from '@/components/GlassCard';
 import { AnimatedButton } from '@/components/AnimatedButton';
 import { useNarratorStore } from '@/lib/narrator-store';
@@ -37,6 +37,8 @@ export default function SettingsScreen() {
   const colorScheme = useColorScheme();
   const voiceSettings = useNarratorStore((s) => s.voiceSettings);
   const setVoiceSettings = useNarratorStore((s) => s.setVoiceSettings);
+  const extractionSettings = useNarratorStore((s) => s.extractionSettings);
+  const setExtractionSettings = useNarratorStore((s) => s.setExtractionSettings);
   const [availableVoices, setAvailableVoices] = useState<Voice[]>([]);
   const [enhancedVoices, setEnhancedVoices] = useState<Voice[]>([]);
 
@@ -435,6 +437,170 @@ export default function SettingsScreen() {
             icon={<Play size={20} color="#fff" fill="#fff" />}
             onPress={testVoice}
           />
+
+          <View className="my-8">
+            <Text
+              style={{ fontFamily: 'PlayfairDisplay_700Bold' }}
+              className={cn(
+                'text-3xl mb-2',
+                colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
+              )}
+            >
+              Content Extraction
+            </Text>
+            <Text
+              style={{ fontFamily: 'Manrope_400Regular' }}
+              className={cn(
+                'text-sm',
+                colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
+              )}
+            >
+              Configure how content is extracted
+            </Text>
+          </View>
+
+          <GlassCard className="p-6 mb-6">
+            <View className="flex-row items-center justify-between mb-3">
+              <View className="flex-row items-center flex-1">
+                <Clipboard
+                  size={24}
+                  color={colorScheme === 'dark' ? '#fff' : '#000'}
+                />
+                <View className="ml-3 flex-1">
+                  <Text
+                    style={{ fontFamily: 'Manrope_600SemiBold' }}
+                    className={cn(
+                      'text-base',
+                      colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
+                    )}
+                  >
+                    Clipboard Monitoring
+                  </Text>
+                  <Text
+                    style={{ fontFamily: 'Manrope_400Regular' }}
+                    className={cn(
+                      'text-xs mt-0.5',
+                      colorScheme === 'dark' ? 'text-white/50' : 'text-slate-500'
+                    )}
+                  >
+                    Auto-detect URLs copied to clipboard
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={extractionSettings.clipboardMonitoring}
+                onValueChange={(value) => {
+                  setExtractionSettings({ clipboardMonitoring: value });
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+                trackColor={{
+                  false: colorScheme === 'dark' ? '#333' : '#ddd',
+                  true: '#8b5cf6',
+                }}
+                thumbColor="#fff"
+              />
+            </View>
+          </GlassCard>
+
+          <GlassCard className="p-6 mb-6">
+            <View className="flex-row items-center justify-between mb-3">
+              <View className="flex-row items-center flex-1">
+                <GlobeIcon
+                  size={24}
+                  color={colorScheme === 'dark' ? '#fff' : '#000'}
+                />
+                <View className="ml-3 flex-1">
+                  <Text
+                    style={{ fontFamily: 'Manrope_600SemiBold' }}
+                    className={cn(
+                      'text-base',
+                      colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
+                    )}
+                  >
+                    Auto-Fetch URLs
+                  </Text>
+                  <Text
+                    style={{ fontFamily: 'Manrope_400Regular' }}
+                    className={cn(
+                      'text-xs mt-0.5',
+                      colorScheme === 'dark' ? 'text-white/50' : 'text-slate-500'
+                    )}
+                  >
+                    Automatically fetch content when URL detected
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={extractionSettings.autoFetchURL}
+                onValueChange={(value) => {
+                  setExtractionSettings({ autoFetchURL: value });
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+                trackColor={{
+                  false: colorScheme === 'dark' ? '#333' : '#ddd',
+                  true: '#8b5cf6',
+                }}
+                thumbColor="#fff"
+              />
+            </View>
+          </GlassCard>
+
+          <GlassCard className="p-6 mb-6">
+            <View className="flex-row items-center mb-4">
+              <Languages
+                size={24}
+                color={colorScheme === 'dark' ? '#fff' : '#000'}
+              />
+              <Text
+                style={{ fontFamily: 'Manrope_600SemiBold' }}
+                className={cn(
+                  'text-base ml-3',
+                  colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
+                )}
+              >
+                OCR Language
+              </Text>
+            </View>
+
+            <Text
+              style={{ fontFamily: 'Manrope_400Regular' }}
+              className={cn(
+                'text-sm mb-3',
+                colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
+              )}
+            >
+              Select language for image text recognition
+            </Text>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerClassName="gap-2"
+              style={{ flexGrow: 0 }}
+            >
+              {[
+                { label: 'English', value: 'en' },
+                { label: 'Spanish', value: 'es' },
+                { label: 'French', value: 'fr' },
+                { label: 'German', value: 'de' },
+                { label: 'Chinese', value: 'zh' },
+                { label: 'Japanese', value: 'ja' },
+                { label: 'Korean', value: 'ko' },
+              ].map((lang) => (
+                <AnimatedButton
+                  key={lang.value}
+                  title={lang.label}
+                  variant={
+                    extractionSettings.ocrLanguage === lang.value
+                      ? 'primary'
+                      : 'secondary'
+                  }
+                  size="sm"
+                  onPress={() => setExtractionSettings({ ocrLanguage: lang.value })}
+                />
+              ))}
+            </ScrollView>
+          </GlassCard>
 
           <View className="mt-8 p-6">
             <Text

@@ -7,12 +7,22 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as Brightness from 'expo-brightness';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
-import { Play, Pause, Square, Settings, Bookmark, Mic, Upload, Globe } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { Play, Pause, Square, Settings, Bookmark, Mic, Upload, Globe, Camera, Image as ImageIcon } from 'lucide-react-native';
 import { GlassCard } from '@/components/GlassCard';
 import { AnimatedButton } from '@/components/AnimatedButton';
 import { WaveformVisualizer } from '@/components/WaveformVisualizer';
+import { ContentPreview } from '@/components/ContentPreview';
 import { useNarratorStore } from '@/lib/narrator-store';
 import { isURL, fetchContentFromURL, validateURL } from '@/lib/content-fetcher';
+import { useClipboardMonitor } from '@/lib/useClipboardMonitor';
+import {
+  extractTextFromImage,
+  extractTextFromPDF,
+  extractTextFromWebEnhanced,
+  isLikelyScreenshot,
+  type ExtractionResult,
+} from '@/lib/ocr-extractor';
 import { useFonts, PlayfairDisplay_700Bold } from '@expo-google-fonts/playfair-display';
 import { Manrope_400Regular, Manrope_600SemiBold } from '@expo-google-fonts/manrope';
 import Animated, {
@@ -37,6 +47,8 @@ export default function NarratorScreen() {
   const [isFetchingURL, setIsFetchingURL] = useState(false);
   const [fetchedURLTitle, setFetchedURLTitle] = useState<string | undefined>(undefined);
   const [isLoadingSharedContent, setIsLoadingSharedContent] = useState(false);
+  const [extractionPreview, setExtractionPreview] = useState<ExtractionResult | null>(null);
+  const [isExtracting, setIsExtracting] = useState(false);
   const words = text.split(/\s+/).filter(Boolean);
   const highlightIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -53,6 +65,12 @@ export default function NarratorScreen() {
 
   const titleOpacity = useSharedValue(1);
   const contentScale = useSharedValue(1);
+
+  // Clipboard monitoring
+  useClipboardMonitor((url) => {
+    setText(url);
+    fetchURLContent(url);
+  });
 
   useEffect(() => {
     return () => {
@@ -99,7 +117,7 @@ export default function NarratorScreen() {
     const sentencePattern = /([^.!?]+[.!?]+)/g;
     const sentences = fullText.match(sentencePattern) || [fullText];
 
-    const segments: Array<{ text: string; wordCount: number; pauseAfter: number }> = [];
+    const segments: { text: string; wordCount: number; pauseAfter: number }[] = [];
 
     sentences.forEach((sentence) => {
       const trimmed = sentence.trim();
@@ -275,12 +293,23 @@ export default function NarratorScreen() {
         // Read plain text files directly
         extractedText = await FileSystem.readAsStringAsync(fileUri);
       } else if (mimeType === 'application/pdf' || file.name.endsWith('.pdf')) {
-        // For PDFs, show info message
-        Alert.alert(
-          'PDF Import',
-          'PDF text extraction requires additional setup. For now, please copy and paste text from your PDF, or convert it to a TXT file first.\n\nFull PDF support coming soon!',
-          [{ text: 'OK' }]
-        );
+        // For PDFs, use backend extraction
+        setIsExtracting(true);
+        try {
+          const result = await extractTextFromPDF(fileUri);
+          setExtractionPreview(result);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch (error) {
+          console.error('PDF extraction error:', error);
+          Alert.alert(
+            'PDF Extraction Failed',
+            error instanceof Error ? error.message : 'Could not extract text from PDF. Please try again.',
+            [{ text: 'OK' }]
+          );
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        } finally {
+          setIsExtracting(false);
+        }
         return;
       } else if (
         mimeType === 'application/msword' ||
@@ -336,6 +365,137 @@ export default function NarratorScreen() {
     }
   };
 
+  const importFromCamera = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Camera Permission Required',
+          'Please grant camera permission to scan images.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 1,
+        allowsEditing: false,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const imageUri = result.assets[0].uri;
+      const width = result.assets[0].width || 0;
+      const height = result.assets[0].height || 0;
+      const isScreenshot = isLikelyScreenshot(width, height);
+
+      setIsExtracting(true);
+      try {
+        const extractionResult = await extractTextFromImage(imageUri, isScreenshot);
+        setExtractionPreview(extractionResult);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (error) {
+        console.error('OCR extraction error:', error);
+        Alert.alert(
+          'Text Extraction Failed',
+          error instanceof Error ? error.message : 'Could not extract text from image. Please try again.',
+          [{ text: 'OK' }]
+        );
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } finally {
+        setIsExtracting(false);
+      }
+    } catch (error) {
+      console.error('Camera error:', error);
+      Alert.alert('Camera Failed', 'Could not open camera. Please try again.', [
+        { text: 'OK' },
+      ]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  };
+
+  const importFromGallery = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Gallery Permission Required',
+          'Please grant gallery permission to select images.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 1,
+        allowsEditing: false,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const imageUri = result.assets[0].uri;
+      const width = result.assets[0].width || 0;
+      const height = result.assets[0].height || 0;
+      const isScreenshot = isLikelyScreenshot(width, height);
+
+      setIsExtracting(true);
+      try {
+        const extractionResult = await extractTextFromImage(imageUri, isScreenshot);
+        setExtractionPreview(extractionResult);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (error) {
+        console.error('OCR extraction error:', error);
+        Alert.alert(
+          'Text Extraction Failed',
+          error instanceof Error ? error.message : 'Could not extract text from image. Please try again.',
+          [{ text: 'OK' }]
+        );
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } finally {
+        setIsExtracting(false);
+      }
+    } catch (error) {
+      console.error('Gallery error:', error);
+      Alert.alert('Gallery Failed', 'Could not open gallery. Please try again.', [
+        { text: 'OK' },
+      ]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  };
+
+  const handlePreviewNarrate = () => {
+    if (extractionPreview) {
+      setText(extractionPreview.text);
+      setFetchedURLTitle(extractionPreview.title);
+      setExtractionPreview(null);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+  };
+
+  const handlePreviewEdit = () => {
+    if (extractionPreview) {
+      setText(extractionPreview.text);
+      setFetchedURLTitle(extractionPreview.title);
+      setExtractionPreview(null);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  const handlePreviewCancel = () => {
+    setExtractionPreview(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
   const handleTextChange = async (newText: string) => {
     setText(newText);
     setFetchedURLTitle(undefined);
@@ -365,6 +525,18 @@ export default function NarratorScreen() {
       setIsFetchingURL(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+      // Try enhanced extraction first if backend is available
+      try {
+        const result = await extractTextFromWebEnhanced(url);
+        setExtractionPreview(result);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        return;
+      } catch (enhancedError) {
+        console.log('Enhanced extraction failed, falling back to client-side:', enhancedError);
+        // Fallback to client-side extraction
+      }
+
+      // Fallback to original client-side extraction
       const content = await fetchContentFromURL(url);
 
       // Only update if the URL field hasn't changed
@@ -444,6 +616,44 @@ export default function NarratorScreen() {
           </Animated.View>
 
           <Animated.View style={contentStyle}>
+            {isExtracting ? (
+              <GlassCard className="p-8 mb-6">
+                <View className="items-center justify-center">
+                  <ActivityIndicator
+                    size="large"
+                    color={colorScheme === 'dark' ? '#8b5cf6' : '#7c3aed'}
+                  />
+                  <Text
+                    style={{ fontFamily: 'Manrope_600SemiBold' }}
+                    className={cn(
+                      'text-base mt-4',
+                      colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
+                    )}
+                  >
+                    Extracting text...
+                  </Text>
+                  <Text
+                    style={{ fontFamily: 'Manrope_400Regular' }}
+                    className={cn(
+                      'text-sm mt-2 text-center',
+                      colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
+                    )}
+                  >
+                    This may take a few seconds
+                  </Text>
+                </View>
+              </GlassCard>
+            ) : null}
+
+            {extractionPreview ? (
+              <ContentPreview
+                extractionResult={extractionPreview}
+                onNarrate={handlePreviewNarrate}
+                onEdit={handlePreviewEdit}
+                onCancel={handlePreviewCancel}
+              />
+            ) : null}
+
             <GlassCard className="p-6 mb-6">
               <View className="flex-row justify-between items-center mb-4">
                 <View>
@@ -525,6 +735,25 @@ export default function NarratorScreen() {
                         </Text>
                       </View>
                     ) : null}
+                  </View>
+
+                  <View className="flex-row gap-2 mb-2">
+                    <AnimatedButton
+                      title="Scan Image"
+                      variant="ghost"
+                      icon={<Camera size={18} color={colorScheme === 'dark' ? '#fff' : '#000'} />}
+                      onPress={importFromCamera}
+                      size="sm"
+                      className="flex-1"
+                    />
+                    <AnimatedButton
+                      title="Choose Image"
+                      variant="ghost"
+                      icon={<ImageIcon size={18} color={colorScheme === 'dark' ? '#fff' : '#000'} />}
+                      onPress={importFromGallery}
+                      size="sm"
+                      className="flex-1"
+                    />
                   </View>
 
                   <View className="flex-row gap-2">
