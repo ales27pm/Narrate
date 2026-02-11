@@ -6,6 +6,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { createWorker } from "tesseract.js";
 
 const ocrRouter = new Hono();
 
@@ -18,49 +19,38 @@ ocrRouter.post("/extract", zValidator("json", ocrSchema), async (c) => {
   const { image, isScreenshot } = c.req.valid("json");
 
   try {
-    // TODO: Implement OCR extraction
-    // This requires installing an OCR library like:
-    // - tesseract.js for JavaScript OCR
-    // - Google Cloud Vision API
-    // - AWS Textract
-    // - Azure Computer Vision
+    // Convert base64 to buffer
+    const buffer = Buffer.from(image, "base64");
 
-    // For now, return a helpful error message
-    return c.json(
-      {
-        error: {
-          message:
-            "OCR service not yet configured. To enable OCR:\n\n" +
-            "1. Install an OCR library (e.g., bun add tesseract.js)\n" +
-            "2. Implement the extraction logic in backend/src/routes/ocr.ts\n" +
-            "3. Or use a cloud service like Google Vision API\n\n" +
-            "For now, you can copy and paste text manually.",
-          code: "OCR_NOT_CONFIGURED",
+    // Create Tesseract worker
+    const worker = await createWorker("eng");
+
+    try {
+      // Perform OCR
+      const { data: { text, confidence } } = await worker.recognize(buffer);
+
+      // Clean up extracted text
+      const cleanText = text
+        .replace(/\s+/g, " ")
+        .trim();
+
+      return c.json({
+        data: {
+          text: cleanText,
+          confidence: confidence / 100,
+          isScreenshot: isScreenshot || false,
         },
-      },
-      503
-    );
-
-    // Example implementation with tesseract.js:
-    /*
-    import Tesseract from 'tesseract.js';
-
-    const buffer = Buffer.from(image, 'base64');
-    const { data: { text, confidence } } = await Tesseract.recognize(buffer, 'eng');
-
-    return c.json({
-      data: {
-        text,
-        confidence: confidence / 100,
-      },
-    });
-    */
+      });
+    } finally {
+      // Always terminate worker to free resources
+      await worker.terminate();
+    }
   } catch (error) {
     console.error("OCR extraction error:", error);
     return c.json(
       {
         error: {
-          message: "Failed to extract text from image",
+          message: error instanceof Error ? error.message : "Failed to extract text from image",
           code: "OCR_EXTRACTION_FAILED",
         },
       },

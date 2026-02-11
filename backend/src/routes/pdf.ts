@@ -6,6 +6,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { PDFParse } from "pdf-parse";
 
 const pdfRouter = new Hono();
 
@@ -17,47 +18,40 @@ pdfRouter.post("/extract", zValidator("json", pdfSchema), async (c) => {
   const { pdf } = c.req.valid("json");
 
   try {
-    // TODO: Implement PDF text extraction
-    // This requires installing a PDF library like:
-    // - pdf-parse for Node.js
-    // - pdfjs-dist (PDF.js)
+    // Convert base64 to buffer
+    const buffer = Buffer.from(pdf, "base64");
 
-    // For now, return a helpful error message
-    return c.json(
-      {
-        error: {
-          message:
-            "PDF extraction service not yet configured. To enable PDF extraction:\n\n" +
-            "1. Install a PDF library (e.g., bun add pdf-parse)\n" +
-            "2. Implement the extraction logic in backend/src/routes/pdf.ts\n\n" +
-            "For now, you can copy text from your PDF manually or convert it to TXT.",
-          code: "PDF_NOT_CONFIGURED",
-        },
-      },
-      503
-    );
+    // Create parser and extract text
+    const parser = new PDFParse({ data: buffer });
+    const result = await parser.getText();
+    const info = await parser.getInfo();
 
-    // Example implementation with pdf-parse:
-    /*
-    import pdfParse from 'pdf-parse';
+    // Clean up extracted text - remove excessive whitespace
+    const cleanText = result.text
+      .replace(/\s+/g, " ")
+      .trim();
 
-    const buffer = Buffer.from(pdf, 'base64');
-    const data = await pdfParse(buffer);
+    // Clean up resources
+    await parser.destroy();
 
     return c.json({
       data: {
-        text: data.text,
-        title: data.info?.Title,
-        pageCount: data.numpages,
+        text: cleanText,
+        title: info.info?.Title || "Untitled PDF",
+        pageCount: result.pages.length,
+        metadata: {
+          author: info.info?.Author || null,
+          subject: info.info?.Subject || null,
+          creationDate: info.info?.CreationDate || null,
+        },
       },
     });
-    */
   } catch (error) {
     console.error("PDF extraction error:", error);
     return c.json(
       {
         error: {
-          message: "Failed to extract text from PDF",
+          message: error instanceof Error ? error.message : "Failed to extract text from PDF",
           code: "PDF_EXTRACTION_FAILED",
         },
       },
