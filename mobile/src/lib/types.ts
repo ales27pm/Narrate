@@ -13,6 +13,17 @@ export interface Story {
   duration?: number;
 }
 
+export type VoicePersonality = 'professionnel' | 'conversationnel' | 'dramatique' | 'decontracte';
+export type TTSProvider = 'expo-speech' | 'google-cloud' | 'elevenlabs' | 'azure';
+
+export interface ProsodySettings {
+  intensity: number; // 0.0 to 1.0 (subtle to dramatic)
+  pauseMultiplier: number; // 0.5x to 2x
+  emphasisDetection: boolean;
+  breathingSounds: boolean;
+  naturalPacing: boolean;
+}
+
 export interface VoiceSettings {
   language: string; // Voice language (e.g., en-US, fr-FR, fr-CA)
   pitch: number;
@@ -21,6 +32,13 @@ export interface VoiceSettings {
   voice?: string; // Voice identifier for native voice selection
   appLanguage: 'en' | 'fr-FR' | 'fr-CA'; // App UI language
   detectedLanguage?: string; // Last detected content language
+
+  // Advanced prosody settings
+  prosody: ProsodySettings;
+  personality?: VoicePersonality;
+  ttsProvider: TTSProvider;
+  premiumVoiceId?: string; // For premium TTS providers
+  apiKey?: string; // For premium TTS providers (optional, can use backend)
 }
 
 export interface RecordingState {

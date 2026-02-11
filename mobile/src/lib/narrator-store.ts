@@ -66,6 +66,15 @@ export const useNarratorStore = create<NarratorStore>((set, get) => ({
     rate: 1.0,
     volume: 1.0,
     appLanguage: 'en',
+    prosody: {
+      intensity: 0.7,
+      pauseMultiplier: 1.0,
+      emphasisDetection: true,
+      breathingSounds: false,
+      naturalPacing: true,
+    },
+    ttsProvider: 'expo-speech',
+    personality: 'professionnel',
   },
   narrationState: {
     isPlaying: false,

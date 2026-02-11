@@ -23,6 +23,8 @@ import {
   isLikelyScreenshot,
   type ExtractionResult,
 } from '@/lib/ocr-extractor';
+import { ProsodyEngine, preprocessCanadianFrench } from '@/lib/prosody-engine';
+import { applyVoiceProfile, getVoiceProfile } from '@/lib/voice-profiles';
 import { useFonts, PlayfairDisplay_700Bold } from '@expo-google-fonts/playfair-display';
 import { Manrope_400Regular, Manrope_600SemiBold } from '@expo-google-fonts/manrope';
 import Animated, {
@@ -160,20 +162,42 @@ export default function NarratorScreen() {
     setOriginalBrightness(currentBrightness);
     await Brightness.setBrightnessAsync(0.8);
 
-    const segments = createSpeechSegments(text);
-    const wordsPerMinute = voiceSettings.rate * 150;
+    // Preprocess text for Canadian French if needed
+    const processedText =
+      voiceSettings.language === 'fr-CA' ? preprocessCanadianFrench(text) : text;
+
+    // Initialize prosody engine with current settings
+    const prosodyEngine = new ProsodyEngine(voiceSettings.prosody);
+    const textSegments = prosodyEngine.analyzeText(processedText);
+
+    // Apply voice profile settings
+    const currentProfile = voiceSettings.personality
+      ? getVoiceProfile(voiceSettings.personality)
+      : null;
+
+    let baseSettings = {
+      pitch: voiceSettings.pitch,
+      rate: voiceSettings.rate,
+      volume: voiceSettings.volume,
+    };
+
+    if (currentProfile) {
+      baseSettings = applyVoiceProfile(baseSettings, currentProfile);
+    }
+
+    const wordsPerMinute = baseSettings.rate * 150;
     const millisecondsPerWord = (60 / wordsPerMinute) * 1000;
 
     let segmentIndex = 0;
 
-    // Speak segments sequentially with natural pauses
+    // Speak segments sequentially with prosody-aware pauses
     const speakNextSegment = () => {
-      if (segmentIndex >= segments.length) {
+      if (segmentIndex >= textSegments.length) {
         stopNarration();
         return;
       }
 
-      const segment = segments[segmentIndex];
+      const segment = textSegments[segmentIndex];
       const sentenceWords = segment.text.split(/\s+/).filter(Boolean);
       let wordIndex = 0;
 
@@ -192,20 +216,32 @@ export default function NarratorScreen() {
         }
       }, millisecondsPerWord);
 
+      // Apply prosody adjustments to speech settings for this segment
+      const segmentSettings = prosodyEngine.applyProsodyToSpeech(baseSettings, segment);
+
       Speech.speak(segment.text, {
         language: voiceSettings.language,
-        pitch: voiceSettings.pitch,
-        rate: voiceSettings.rate,
-        volume: voiceSettings.volume,
+        pitch: segmentSettings.pitch,
+        rate: segmentSettings.rate,
+        volume: segmentSettings.volume,
         voice: voiceSettings.voice,
         onDone: () => {
           if (highlightIntervalRef.current) {
             clearInterval(highlightIntervalRef.current);
           }
+
+          // Get pauses from prosody hints
+          const pauses = prosodyEngine.getPausesForSegment(segment);
+          const endPauses = pauses.filter(p => p.position >= segment.text.length - 5);
+          const pauseDuration = endPauses.length > 0
+            ? Math.max(...endPauses.map(p => p.duration))
+            : 300; // Default pause
+
           segmentIndex++;
+
           // Add natural pause before next segment
-          if (segment.pauseAfter > 0 && segmentIndex < segments.length) {
-            setTimeout(speakNextSegment, segment.pauseAfter);
+          if (segmentIndex < textSegments.length) {
+            setTimeout(speakNextSegment, pauseDuration);
           } else {
             speakNextSegment();
           }
