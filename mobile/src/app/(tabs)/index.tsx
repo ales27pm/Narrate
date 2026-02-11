@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, ScrollView, Pressable, useColorScheme, Alert } from 'react-native';
+import { View, Text, TextInput, ScrollView, Pressable, useColorScheme, Alert, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
@@ -7,11 +7,12 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as Brightness from 'expo-brightness';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
-import { Play, Pause, Square, Settings, Bookmark, Mic, Upload } from 'lucide-react-native';
+import { Play, Pause, Square, Settings, Bookmark, Mic, Upload, Globe } from 'lucide-react-native';
 import { GlassCard } from '@/components/GlassCard';
 import { AnimatedButton } from '@/components/AnimatedButton';
 import { WaveformVisualizer } from '@/components/WaveformVisualizer';
 import { useNarratorStore } from '@/lib/narrator-store';
+import { isURL, fetchContentFromURL, validateURL } from '@/lib/content-fetcher';
 import { useFonts, PlayfairDisplay_700Bold } from '@expo-google-fonts/playfair-display';
 import { Manrope_400Regular, Manrope_600SemiBold } from '@expo-google-fonts/manrope';
 import Animated, {
@@ -33,6 +34,8 @@ export default function NarratorScreen() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [originalBrightness, setOriginalBrightness] = useState<number | null>(null);
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
+  const [isFetchingURL, setIsFetchingURL] = useState(false);
+  const [fetchedURLTitle, setFetchedURLTitle] = useState<string | undefined>(undefined);
   const words = text.split(/\s+/).filter(Boolean);
   const highlightIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -295,6 +298,7 @@ export default function NarratorScreen() {
 
       if (extractedText.trim()) {
         setText(extractedText.trim());
+        setFetchedURLTitle(undefined);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         Alert.alert('Empty File', 'No text could be extracted from this file.', [
@@ -308,6 +312,73 @@ export default function NarratorScreen() {
       ]);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
+  };
+
+  const handleTextChange = async (newText: string) => {
+    setText(newText);
+    setFetchedURLTitle(undefined);
+
+    // Check if the text looks like a URL
+    if (isURL(newText.trim()) && newText.trim().length > 10) {
+      // Validate URL format
+      const validation = validateURL(newText.trim());
+      if (!validation.valid) {
+        return;
+      }
+
+      // Debounce URL fetching to avoid fetching on every character
+      // Only fetch when user has likely finished typing
+      const trimmed = newText.trim();
+      setTimeout(async () => {
+        // Check if text is still the same (user hasn't continued typing)
+        if (text.trim() === trimmed && isURL(trimmed)) {
+          await fetchURLContent(trimmed);
+        }
+      }, 1000);
+    }
+  };
+
+  const fetchURLContent = async (url: string) => {
+    try {
+      setIsFetchingURL(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      const content = await fetchContentFromURL(url);
+
+      // Only update if the URL field hasn't changed
+      if (text.trim() === url.trim()) {
+        setText(content.text);
+        setFetchedURLTitle(content.title);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (error) {
+      console.error('URL fetch error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Could not fetch content from this URL';
+      Alert.alert('Fetch Failed', errorMessage, [{ text: 'OK' }]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsFetchingURL(false);
+    }
+  };
+
+  const handleFetchURL = async () => {
+    const trimmed = text.trim();
+    if (!isURL(trimmed)) {
+      Alert.alert('Invalid URL', 'Please enter a valid website URL (e.g., https://example.com)', [
+        { text: 'OK' },
+      ]);
+      return;
+    }
+
+    const validation = validateURL(trimmed);
+    if (!validation.valid) {
+      Alert.alert('Invalid URL', validation.error || 'Please enter a valid URL', [
+        { text: 'OK' },
+      ]);
+      return;
+    }
+
+    await fetchURLContent(trimmed);
   };
 
   if (!fontsLoaded) {
@@ -353,15 +424,29 @@ export default function NarratorScreen() {
           <Animated.View style={contentStyle}>
             <GlassCard className="p-6 mb-6">
               <View className="flex-row justify-between items-center mb-4">
-                <Text
-                  style={{ fontFamily: 'Manrope_600SemiBold' }}
-                  className={cn(
-                    'text-lg',
-                    colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
-                  )}
-                >
-                  Your Text
-                </Text>
+                <View>
+                  <Text
+                    style={{ fontFamily: 'Manrope_600SemiBold' }}
+                    className={cn(
+                      'text-lg',
+                      colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
+                    )}
+                  >
+                    Your Text
+                  </Text>
+                  {fetchedURLTitle ? (
+                    <Text
+                      style={{ fontFamily: 'Manrope_400Regular' }}
+                      className={cn(
+                        'text-xs mt-1',
+                        colorScheme === 'dark' ? 'text-purple-400' : 'text-purple-600'
+                      )}
+                      numberOfLines={1}
+                    >
+                      From: {fetchedURLTitle}
+                    </Text>
+                  ) : null}
+                </View>
                 <View className="flex-row gap-2">
                   <Pressable
                     onPress={() => router.push('/settings')}
@@ -383,29 +468,64 @@ export default function NarratorScreen() {
 
               {!isSpeaking ? (
                 <>
-                  <TextInput
-                    value={text}
-                    onChangeText={setText}
-                    placeholder="Enter your text here or import a document..."
-                    placeholderTextColor={colorScheme === 'dark' ? '#666' : '#999'}
-                    multiline
-                    style={{
-                      fontFamily: 'Manrope_400Regular',
-                      minHeight: 200,
-                      color: colorScheme === 'dark' ? '#fff' : '#000',
-                      fontSize: 16,
-                      lineHeight: 24,
-                    }}
-                    className="mb-4"
-                  />
+                  <View className="relative">
+                    <TextInput
+                      value={text}
+                      onChangeText={handleTextChange}
+                      placeholder="Enter text or paste a website URL..."
+                      placeholderTextColor={colorScheme === 'dark' ? '#666' : '#999'}
+                      multiline
+                      editable={!isFetchingURL}
+                      style={{
+                        fontFamily: 'Manrope_400Regular',
+                        minHeight: 200,
+                        color: colorScheme === 'dark' ? '#fff' : '#000',
+                        fontSize: 16,
+                        lineHeight: 24,
+                        opacity: isFetchingURL ? 0.5 : 1,
+                      }}
+                      className="mb-4"
+                    />
+                    {isFetchingURL ? (
+                      <View className="absolute inset-0 items-center justify-center">
+                        <ActivityIndicator
+                          size="large"
+                          color={colorScheme === 'dark' ? '#8b5cf6' : '#7c3aed'}
+                        />
+                        <Text
+                          style={{ fontFamily: 'Manrope_400Regular' }}
+                          className={cn(
+                            'text-sm mt-2',
+                            colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
+                          )}
+                        >
+                          Fetching content...
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
 
-                  <AnimatedButton
-                    title="Import Document"
-                    variant="ghost"
-                    icon={<Upload size={18} color={colorScheme === 'dark' ? '#fff' : '#000'} />}
-                    onPress={importDocument}
-                    size="sm"
-                  />
+                  <View className="flex-row gap-2">
+                    <AnimatedButton
+                      title="Import Document"
+                      variant="ghost"
+                      icon={<Upload size={18} color={colorScheme === 'dark' ? '#fff' : '#000'} />}
+                      onPress={importDocument}
+                      size="sm"
+                      className="flex-1"
+                    />
+                    {isURL(text.trim()) && text.trim().length > 10 ? (
+                      <AnimatedButton
+                        title="Fetch URL"
+                        variant="ghost"
+                        icon={<Globe size={18} color={colorScheme === 'dark' ? '#fff' : '#000'} />}
+                        onPress={handleFetchURL}
+                        size="sm"
+                        className="flex-1"
+                        disabled={isFetchingURL}
+                      />
+                    ) : null}
+                  </View>
                 </>
               ) : (
                 <View className="min-h-[200px] mb-4 justify-center">
@@ -472,11 +592,11 @@ export default function NarratorScreen() {
               </View>
             </GlassCard>
 
-            {isSpeaking && (
+            {isSpeaking ? (
               <GlassCard className="p-6 mb-6">
                 <WaveformVisualizer isActive={isSpeaking} className="h-32" />
               </GlassCard>
-            )}
+            ) : null}
 
             <View className="gap-4">
               {!isSpeaking ? (

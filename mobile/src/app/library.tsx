@@ -236,7 +236,7 @@ export default function LibraryScreen() {
                           >
                             {story.wordCount} words
                           </Text>
-                          {story.audioUri && (
+                          {story.audioUri ? (
                             <View className="flex-row items-center">
                               <Play
                                 size={12}
@@ -249,7 +249,7 @@ export default function LibraryScreen() {
                                 Audio
                               </Text>
                             </View>
-                          )}
+                          ) : null}
                         </View>
                       </View>
 

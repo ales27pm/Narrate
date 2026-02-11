@@ -260,7 +260,7 @@ export default function RecorderScreen() {
                 {formatTime(isRecording ? duration : playbackPosition)}
               </Text>
 
-              {recordingUri && !isRecording && (
+              {recordingUri && !isRecording ? (
                 <Text
                   style={{ fontFamily: 'Manrope_400Regular' }}
                   className={cn(
@@ -270,36 +270,36 @@ export default function RecorderScreen() {
                 >
                   Duration: {formatTime(duration)}
                 </Text>
-              )}
+              ) : null}
             </View>
 
-            {(isRecording || isPlaying) && (
+            {isRecording || isPlaying ? (
               <View className="mt-8">
                 <WaveformVisualizer isActive={isRecording || isPlaying} />
               </View>
-            )}
+            ) : null}
           </GlassCard>
 
           <View className="gap-4">
-            {!isRecording && !recordingUri && (
+            {!isRecording && !recordingUri ? (
               <AnimatedButton
                 title="Start Recording"
                 icon={<Mic size={24} color="#fff" />}
                 onPress={startRecording}
                 size="lg"
               />
-            )}
+            ) : null}
 
-            {isRecording && (
+            {isRecording ? (
               <AnimatedButton
                 title="Stop Recording"
                 icon={<Square size={24} color="#fff" />}
                 onPress={stopRecording}
                 size="lg"
               />
-            )}
+            ) : null}
 
-            {recordingUri && !isRecording && (
+            {recordingUri && !isRecording ? (
               <>
                 <AnimatedButton
                   title={isPlaying ? 'Pause' : 'Play Recording'}
@@ -335,16 +335,16 @@ export default function RecorderScreen() {
                   />
                 </View>
 
-                {currentStory && (
+                {currentStory ? (
                   <AnimatedButton
                     title="Save to Story"
                     variant="secondary"
                     icon={<Save size={20} color="#fff" />}
                     onPress={saveRecording}
                   />
-                )}
+                ) : null}
               </>
-            )}
+            ) : null}
           </View>
         </View>
       </LinearGradient>
