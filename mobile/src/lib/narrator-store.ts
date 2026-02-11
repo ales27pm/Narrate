@@ -2,12 +2,20 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Story, VoiceSettings, NarrationState, RecordingState } from './types';
 
+export interface SharedContentData {
+  text: string;
+  title?: string;
+  url?: string;
+  timestamp: number;
+}
+
 interface NarratorStore {
   stories: Story[];
   currentStory: Story | null;
   voiceSettings: VoiceSettings;
   narrationState: NarrationState;
   recordingState: RecordingState;
+  sharedContent: SharedContentData | null;
 
   // Story management
   addStory: (story: Omit<Story, 'id' | 'createdAt' | 'updatedAt'>) => void;
@@ -26,6 +34,10 @@ interface NarratorStore {
   // Recording state
   setRecordingState: (state: Partial<RecordingState>) => void;
   resetRecording: () => void;
+
+  // Shared content
+  setSharedContent: (content: SharedContentData | null) => void;
+  clearSharedContent: () => void;
 
   // Persistence
   loadStories: () => Promise<void>;
@@ -53,6 +65,7 @@ export const useNarratorStore = create<NarratorStore>((set, get) => ({
     isPaused: false,
     duration: 0,
   },
+  sharedContent: null,
 
   addStory: (story) => {
     const newStory: Story = {
@@ -121,6 +134,10 @@ export const useNarratorStore = create<NarratorStore>((set, get) => ({
         duration: 0,
       },
     }),
+
+  setSharedContent: (content) => set({ sharedContent: content }),
+
+  clearSharedContent: () => set({ sharedContent: null }),
 
   loadStories: async () => {
     try {

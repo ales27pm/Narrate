@@ -6,6 +6,10 @@ import { useColorScheme } from '@/lib/useColorScheme';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
+import * as Linking from 'expo-linking';
+import { useEffect } from 'react';
+import { useNarratorStore } from '@/lib/narrator-store';
+import { parseSharedLink, processSharedContent } from '@/lib/share-handler';
 
 export const unstable_settings = {
   // Ensure that reloading on `/modal` keeps a back button present.
@@ -56,6 +60,54 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const setSharedContent = useNarratorStore((s) => s.setSharedContent);
+
+  useEffect(() => {
+    // Handle initial URL when app is opened from a share action
+    const handleInitialURL = async () => {
+      const initialUrl = await Linking.getInitialURL();
+      if (initialUrl) {
+        const sharedContent = parseSharedLink(initialUrl);
+        if (sharedContent) {
+          try {
+            const processed = await processSharedContent(sharedContent);
+            setSharedContent({
+              text: processed.text,
+              title: processed.title,
+              url: sharedContent.url,
+              timestamp: Date.now(),
+            });
+          } catch (error) {
+            console.error('Failed to process initial shared content:', error);
+          }
+        }
+      }
+    };
+
+    handleInitialURL();
+
+    // Listen for deep links while app is running
+    const subscription = Linking.addEventListener('url', async (event) => {
+      const sharedContent = parseSharedLink(event.url);
+      if (sharedContent) {
+        try {
+          const processed = await processSharedContent(sharedContent);
+          setSharedContent({
+            text: processed.text,
+            title: processed.title,
+            url: sharedContent.url,
+            timestamp: Date.now(),
+          });
+        } catch (error) {
+          console.error('Failed to process shared content:', error);
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [setSharedContent]);
 
   return (
     <QueryClientProvider client={queryClient}>

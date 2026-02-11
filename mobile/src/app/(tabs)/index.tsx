@@ -36,11 +36,14 @@ export default function NarratorScreen() {
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
   const [isFetchingURL, setIsFetchingURL] = useState(false);
   const [fetchedURLTitle, setFetchedURLTitle] = useState<string | undefined>(undefined);
+  const [isLoadingSharedContent, setIsLoadingSharedContent] = useState(false);
   const words = text.split(/\s+/).filter(Boolean);
   const highlightIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const voiceSettings = useNarratorStore((s) => s.voiceSettings);
   const addStory = useNarratorStore((s) => s.addStory);
+  const sharedContent = useNarratorStore((s) => s.sharedContent);
+  const clearSharedContent = useNarratorStore((s) => s.clearSharedContent);
 
   const [fontsLoaded] = useFonts({
     PlayfairDisplay_700Bold,
@@ -70,6 +73,25 @@ export default function NarratorScreen() {
   const contentStyle = useAnimatedStyle(() => ({
     transform: [{ scale: contentScale.value }],
   }));
+
+  // Load shared content when it becomes available
+  useEffect(() => {
+    if (sharedContent && sharedContent.text) {
+      setIsLoadingSharedContent(true);
+      setText(sharedContent.text);
+      setFetchedURLTitle(sharedContent.title);
+
+      // Clear the shared content from store after loading
+      clearSharedContent();
+
+      // Show success haptic feedback
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      setTimeout(() => {
+        setIsLoadingSharedContent(false);
+      }, 500);
+    }
+  }, [sharedContent, clearSharedContent]);
 
   // Helper to break text into natural speech segments
   const createSpeechSegments = (fullText: string) => {
@@ -417,7 +439,7 @@ export default function NarratorScreen() {
                 colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
               )}
             >
-              Bring your words to life
+              {isLoadingSharedContent ? 'Loading shared content...' : 'Bring your words to life'}
             </Text>
           </Animated.View>
 
