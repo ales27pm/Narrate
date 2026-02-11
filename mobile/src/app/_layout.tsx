@@ -7,9 +7,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import * as Linking from 'expo-linking';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNarratorStore } from '@/lib/narrator-store';
 import { parseSharedLink, processSharedContent } from '@/lib/share-handler';
+import { Audio } from 'expo-av';
+import { Image, View } from 'react-native';
 
 export const unstable_settings = {
   // Ensure that reloading on `/modal` keeps a back button present.
@@ -61,6 +63,40 @@ function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null |
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const setSharedContent = useNarratorStore((s) => s.setSharedContent);
+  const [isStartupComplete, setIsStartupComplete] = useState(false);
+
+  useEffect(() => {
+    // Play startup sound and show splash
+    const playStartupSound = async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+        });
+
+        const { sound } = await Audio.Sound.createAsync(
+          require('../../assets/sounds/startup-sound.mp3')
+        );
+
+        await sound.playAsync();
+
+        // Wait for sound to finish
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if (status.isLoaded && status.didJustFinish) {
+            setIsStartupComplete(true);
+            SplashScreen.hideAsync();
+            sound.unloadAsync();
+          }
+        });
+      } catch (error) {
+        console.error('Failed to play startup sound:', error);
+        setIsStartupComplete(true);
+        SplashScreen.hideAsync();
+      }
+    };
+
+    playStartupSound();
+  }, []);
 
   useEffect(() => {
     // Handle initial URL when app is opened from a share action
@@ -108,6 +144,18 @@ export default function RootLayout() {
       subscription.remove();
     };
   }, [setSharedContent]);
+
+  if (!isStartupComplete) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
+        <Image
+          source={require('../../assets/images/app-icon.png')}
+          style={{ width: 200, height: 200, borderRadius: 40 }}
+          resizeMode="contain"
+        />
+      </View>
+    );
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
