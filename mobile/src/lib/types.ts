@@ -17,6 +17,7 @@ export type VoicePersonality = 'professionnel' | 'conversationnel' | 'dramatique
 export type TTSProvider = 'expo-speech' | 'google-cloud' | 'elevenlabs' | 'azure';
 
 export interface ProsodySettings {
+  enabled: boolean; // Master toggle for prosody features
   intensity: number; // 0.0 to 1.0 (subtle to dramatic)
   pauseMultiplier: number; // 0.5x to 2x
   emphasisDetection: boolean;

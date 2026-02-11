@@ -67,6 +67,7 @@ export const useNarratorStore = create<NarratorStore>((set, get) => ({
     volume: 1.0,
     appLanguage: 'en',
     prosody: {
+      enabled: true,
       intensity: 0.7,
       pauseMultiplier: 1.0,
       emphasisDetection: true,

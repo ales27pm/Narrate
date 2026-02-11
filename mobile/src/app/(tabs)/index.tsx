@@ -162,13 +162,33 @@ export default function NarratorScreen() {
     setOriginalBrightness(currentBrightness);
     await Brightness.setBrightnessAsync(0.8);
 
-    // Preprocess text for Canadian French if needed
+    // Preprocess text for Canadian French if needed (only if prosody is enabled)
     const processedText =
-      voiceSettings.language === 'fr-CA' ? preprocessCanadianFrench(text) : text;
+      voiceSettings.prosody.enabled && voiceSettings.language === 'fr-CA'
+        ? preprocessCanadianFrench(text)
+        : text;
 
-    // Initialize prosody engine with current settings
-    const prosodyEngine = new ProsodyEngine(voiceSettings.prosody);
-    const textSegments = prosodyEngine.analyzeText(processedText);
+    // Initialize prosody engine with current settings (only if enabled)
+    let textSegments: any[] = [];
+    let prosodyEngine: ProsodyEngine | null = null;
+
+    if (voiceSettings.prosody.enabled) {
+      prosodyEngine = new ProsodyEngine(voiceSettings.prosody);
+      textSegments = prosodyEngine.analyzeText(processedText);
+    } else {
+      // Simple sentence splitting without prosody
+      const sentencePattern = /([^.!?]+[.!?]+)/g;
+      const sentences = processedText.match(sentencePattern) || [processedText];
+      textSegments = sentences.map((text, index) => ({
+        text: text.trim(),
+        startIndex: 0,
+        endIndex: text.length,
+        sentenceType: 'statement',
+        emotionalTone: 'neutral',
+        contentType: 'narrative',
+        prosodyHints: [],
+      }));
+    }
 
     // Apply voice profile settings
     const currentProfile = voiceSettings.personality
@@ -181,7 +201,7 @@ export default function NarratorScreen() {
       volume: voiceSettings.volume,
     };
 
-    if (currentProfile) {
+    if (currentProfile && voiceSettings.prosody.enabled) {
       baseSettings = applyVoiceProfile(baseSettings, currentProfile);
     }
 
@@ -190,7 +210,7 @@ export default function NarratorScreen() {
 
     let segmentIndex = 0;
 
-    // Speak segments sequentially with prosody-aware pauses
+    // Speak segments sequentially with prosody-aware pauses (if enabled)
     const speakNextSegment = () => {
       if (segmentIndex >= textSegments.length) {
         stopNarration();
@@ -216,8 +236,11 @@ export default function NarratorScreen() {
         }
       }, millisecondsPerWord);
 
-      // Apply prosody adjustments to speech settings for this segment
-      const segmentSettings = prosodyEngine.applyProsodyToSpeech(baseSettings, segment);
+      // Apply prosody adjustments to speech settings for this segment (only if enabled)
+      const segmentSettings =
+        voiceSettings.prosody.enabled && prosodyEngine
+          ? prosodyEngine.applyProsodyToSpeech(baseSettings, segment)
+          : baseSettings;
 
       Speech.speak(segment.text, {
         language: voiceSettings.language,
@@ -230,12 +253,15 @@ export default function NarratorScreen() {
             clearInterval(highlightIntervalRef.current);
           }
 
-          // Get pauses from prosody hints
-          const pauses = prosodyEngine.getPausesForSegment(segment);
-          const endPauses = pauses.filter(p => p.position >= segment.text.length - 5);
-          const pauseDuration = endPauses.length > 0
-            ? Math.max(...endPauses.map(p => p.duration))
-            : 300; // Default pause
+          // Get pauses from prosody hints (if enabled)
+          let pauseDuration = 300; // Default pause
+          if (voiceSettings.prosody.enabled && prosodyEngine) {
+            const pauses = prosodyEngine.getPausesForSegment(segment);
+            const endPauses = pauses.filter(p => p.position >= segment.text.length - 5);
+            if (endPauses.length > 0) {
+              pauseDuration = Math.max(...endPauses.map(p => p.duration));
+            }
+          }
 
           segmentIndex++;
 

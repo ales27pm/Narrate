@@ -31,6 +31,7 @@ export const canadianFrenchVoiceProfiles: VoiceProfile[] = [
     descriptionFr: 'Voix claire et formelle, style présentateur de nouvelles',
     icon: 'briefcase',
     prosodySettings: {
+      enabled: true,
       intensity: 0.5, // Subtle prosody
       pauseMultiplier: 1.1, // Slightly longer pauses for clarity
       emphasisDetection: true,
@@ -57,6 +58,7 @@ export const canadianFrenchVoiceProfiles: VoiceProfile[] = [
     descriptionFr: 'Voix chaleureuse et amicale, style animateur de balado',
     icon: 'message-circle',
     prosodySettings: {
+      enabled: true,
       intensity: 0.7, // Moderate prosody
       pauseMultiplier: 1.0, // Natural pauses
       emphasisDetection: true,
@@ -83,6 +85,7 @@ export const canadianFrenchVoiceProfiles: VoiceProfile[] = [
     descriptionFr: 'Voix expressive et théâtrale, style narrateur de livre audio',
     icon: 'book-open',
     prosodySettings: {
+      enabled: true,
       intensity: 0.9, // High prosody for dramatic effect
       pauseMultiplier: 1.3, // Longer pauses for drama
       emphasisDetection: true,
@@ -109,6 +112,7 @@ export const canadianFrenchVoiceProfiles: VoiceProfile[] = [
     descriptionFr: 'Voix décontractée, style québécois familier',
     icon: 'smile',
     prosodySettings: {
+      enabled: true,
       intensity: 0.6,
       pauseMultiplier: 0.9, // Shorter pauses for casual flow
       emphasisDetection: true,

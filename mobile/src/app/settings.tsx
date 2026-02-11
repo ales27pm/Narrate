@@ -87,20 +87,20 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     loadVoices();
-  }, []);
+  }, [voiceSettings.language]); // Reload voices when language changes
 
   const loadVoices = async () => {
     try {
       const voices = await Speech.getAvailableVoicesAsync();
       setAvailableVoices(voices);
 
-      // Filter for enhanced quality voices for better narration
-      const enhanced = voices.filter(v => v.quality === 'Enhanced');
-      setEnhancedVoices(enhanced);
+      // Filter voices by the currently selected language
+      const languageVoices = voices.filter(v => v.language === voiceSettings.language);
+      setEnhancedVoices(languageVoices);
 
-      // Auto-select first enhanced voice if none selected
-      if (!voiceSettings.voice && enhanced.length > 0) {
-        setVoiceSettings({ voice: enhanced[0].identifier });
+      // Auto-select first voice for the language if none selected
+      if (!voiceSettings.voice && languageVoices.length > 0) {
+        setVoiceSettings({ voice: languageVoices[0].identifier });
       }
     } catch (error) {
       console.error('Failed to load voices:', error);
@@ -111,9 +111,11 @@ export default function SettingsScreen() {
     const currentProfile = voiceSettings.personality ? getVoiceProfile(voiceSettings.personality) : null;
     const sampleText = currentProfile?.sampleText || t.testVoiceSample;
 
-    // Preprocess if Canadian French
+    // Preprocess if Canadian French and prosody is enabled
     const textToSpeak =
-      voiceSettings.language === 'fr-CA' ? preprocessCanadianFrench(sampleText) : sampleText;
+      voiceSettings.prosody.enabled && voiceSettings.language === 'fr-CA'
+        ? preprocessCanadianFrench(sampleText)
+        : sampleText;
 
     Speech.speak(textToSpeak, {
       language: voiceSettings.language,
@@ -458,7 +460,7 @@ export default function SettingsScreen() {
             </View>
           </GlassCard>
 
-          {enhancedVoices.length > 0 && (
+          {enhancedVoices.length > 0 ? (
             <GlassCard className="p-6 mb-6">
               <View className="flex-row items-center mb-4">
                 <Mic2
@@ -483,7 +485,7 @@ export default function SettingsScreen() {
                   colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
                 )}
               >
-                {t.enhancedQualityVoices}
+                Available voices for {voiceLanguages.find(l => l.value === voiceSettings.language)?.label}
               </Text>
 
               <ScrollView
@@ -523,11 +525,39 @@ export default function SettingsScreen() {
                         colorScheme === 'dark' ? 'text-white/50' : 'text-slate-500'
                       )}
                     >
-                      {voice.language} • Enhanced Quality
+                      {voice.language} • {voice.quality}
                     </Text>
                   </Pressable>
                 ))}
               </ScrollView>
+            </GlassCard>
+          ) : (
+            <GlassCard className="p-6 mb-6">
+              <View className="flex-row items-center mb-4">
+                <Mic2
+                  size={24}
+                  color={colorScheme === 'dark' ? '#fff' : '#000'}
+                />
+                <Text
+                  style={{ fontFamily: 'Manrope_600SemiBold' }}
+                  className={cn(
+                    'text-lg ml-3',
+                    colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
+                  )}
+                >
+                  {t.voiceSelection}
+                </Text>
+              </View>
+
+              <Text
+                style={{ fontFamily: 'Manrope_400Regular' }}
+                className={cn(
+                  'text-sm',
+                  colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
+                )}
+              >
+                No voices available for {voiceLanguages.find(l => l.value === voiceSettings.language)?.label}. The system will use the default voice.
+              </Text>
             </GlassCard>
           )}
 
@@ -553,247 +583,6 @@ export default function SettingsScreen() {
           </View>
 
           <GlassCard className="p-6 mb-6">
-            <View className="flex-row items-center mb-4">
-              <Sparkles
-                size={24}
-                color={colorScheme === 'dark' ? '#fff' : '#000'}
-              />
-              <Text
-                style={{ fontFamily: 'Manrope_600SemiBold' }}
-                className={cn(
-                  'text-lg ml-3',
-                  colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
-                )}
-              >
-                Voice Personality
-              </Text>
-            </View>
-
-            <Text
-              style={{ fontFamily: 'Manrope_400Regular' }}
-              className={cn(
-                'text-sm mb-4',
-                colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
-              )}
-            >
-              Choose a personality that matches your content style
-            </Text>
-
-            {getAllVoiceProfiles().map((profile) => (
-              <Pressable
-                key={profile.id}
-                onPress={() => {
-                  setVoiceSettings({
-                    personality: profile.id,
-                    prosody: profile.prosodySettings,
-                  });
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                }}
-                className={cn(
-                  'p-4 rounded-xl mb-3',
-                  voiceSettings.personality === profile.id
-                    ? 'bg-purple-500/20 border-2 border-purple-500'
-                    : colorScheme === 'dark'
-                    ? 'bg-white/5'
-                    : 'bg-black/5'
-                )}
-              >
-                <View className="flex-row items-center justify-between mb-2">
-                  <Text
-                    style={{ fontFamily: 'Manrope_600SemiBold' }}
-                    className={cn(
-                      'text-base',
-                      voiceSettings.personality === profile.id
-                        ? 'text-purple-400'
-                        : colorScheme === 'dark'
-                        ? 'text-white'
-                        : 'text-slate-900'
-                    )}
-                  >
-                    {voiceSettings.appLanguage === 'en' ? profile.name : profile.nameFr}
-                  </Text>
-                  {voiceSettings.personality === profile.id && (
-                    <View className="bg-purple-500 px-2 py-1 rounded-full">
-                      <Text
-                        style={{ fontFamily: 'Manrope_600SemiBold' }}
-                        className="text-white text-xs"
-                      >
-                        Active
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                <Text
-                  style={{ fontFamily: 'Manrope_400Regular' }}
-                  className={cn(
-                    'text-sm mb-2',
-                    colorScheme === 'dark' ? 'text-white/70' : 'text-slate-600'
-                  )}
-                >
-                  {voiceSettings.appLanguage === 'en'
-                    ? profile.description
-                    : profile.descriptionFr}
-                </Text>
-                <Text
-                  style={{ fontFamily: 'Manrope_400Regular' }}
-                  className={cn(
-                    'text-xs italic',
-                    colorScheme === 'dark' ? 'text-white/50' : 'text-slate-500'
-                  )}
-                >
-                  "{profile.sampleText.substring(0, 80)}..."
-                </Text>
-              </Pressable>
-            ))}
-          </GlassCard>
-
-          <GlassCard className="p-6 mb-6">
-            <View className="flex-row items-center justify-between mb-4">
-              <View className="flex-row items-center">
-                <Zap size={24} color={colorScheme === 'dark' ? '#fff' : '#000'} />
-                <Text
-                  style={{ fontFamily: 'Manrope_600SemiBold' }}
-                  className={cn(
-                    'text-lg ml-3',
-                    colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
-                  )}
-                >
-                  Prosody Intensity
-                </Text>
-              </View>
-              <Text
-                style={{ fontFamily: 'Manrope_600SemiBold' }}
-                className={cn(
-                  'text-base',
-                  colorScheme === 'dark' ? 'text-white/80' : 'text-slate-700'
-                )}
-              >
-                {Math.round(voiceSettings.prosody.intensity * 100)}%
-              </Text>
-            </View>
-
-            <Text
-              style={{ fontFamily: 'Manrope_400Regular' }}
-              className={cn(
-                'text-sm mb-3',
-                colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
-              )}
-            >
-              Control how dramatic the voice intonation and emphasis should be
-            </Text>
-
-            <Slider
-              value={voiceSettings.prosody.intensity}
-              onValueChange={(value) => {
-                setVoiceSettings({
-                  prosody: { ...voiceSettings.prosody, intensity: value },
-                });
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }}
-              minimumValue={0.0}
-              maximumValue={1.0}
-              step={0.1}
-              minimumTrackTintColor="#8b5cf6"
-              maximumTrackTintColor={colorScheme === 'dark' ? '#333' : '#ddd'}
-              thumbTintColor="#8b5cf6"
-            />
-
-            <View className="flex-row justify-between mt-2">
-              <Text
-                style={{ fontFamily: 'Manrope_400Regular' }}
-                className={cn(
-                  'text-xs',
-                  colorScheme === 'dark' ? 'text-white/40' : 'text-slate-500'
-                )}
-              >
-                Subtle
-              </Text>
-              <Text
-                style={{ fontFamily: 'Manrope_400Regular' }}
-                className={cn(
-                  'text-xs',
-                  colorScheme === 'dark' ? 'text-white/40' : 'text-slate-500'
-                )}
-              >
-                Dramatic
-              </Text>
-            </View>
-          </GlassCard>
-
-          <GlassCard className="p-6 mb-6">
-            <View className="flex-row items-center justify-between mb-4">
-              <View className="flex-row items-center">
-                <Music size={24} color={colorScheme === 'dark' ? '#fff' : '#000'} />
-                <Text
-                  style={{ fontFamily: 'Manrope_600SemiBold' }}
-                  className={cn(
-                    'text-lg ml-3',
-                    colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
-                  )}
-                >
-                  Pause Duration
-                </Text>
-              </View>
-              <Text
-                style={{ fontFamily: 'Manrope_600SemiBold' }}
-                className={cn(
-                  'text-base',
-                  colorScheme === 'dark' ? 'text-white/80' : 'text-slate-700'
-                )}
-              >
-                {voiceSettings.prosody.pauseMultiplier.toFixed(1)}x
-              </Text>
-            </View>
-
-            <Text
-              style={{ fontFamily: 'Manrope_400Regular' }}
-              className={cn(
-                'text-sm mb-3',
-                colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
-              )}
-            >
-              Adjust natural pauses between sentences and phrases
-            </Text>
-
-            <Slider
-              value={voiceSettings.prosody.pauseMultiplier}
-              onValueChange={(value) => {
-                setVoiceSettings({
-                  prosody: { ...voiceSettings.prosody, pauseMultiplier: value },
-                });
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }}
-              minimumValue={0.5}
-              maximumValue={2.0}
-              step={0.1}
-              minimumTrackTintColor="#8b5cf6"
-              maximumTrackTintColor={colorScheme === 'dark' ? '#333' : '#ddd'}
-              thumbTintColor="#8b5cf6"
-            />
-
-            <View className="flex-row justify-between mt-2">
-              <Text
-                style={{ fontFamily: 'Manrope_400Regular' }}
-                className={cn(
-                  'text-xs',
-                  colorScheme === 'dark' ? 'text-white/40' : 'text-slate-500'
-                )}
-              >
-                Shorter
-              </Text>
-              <Text
-                style={{ fontFamily: 'Manrope_400Regular' }}
-                className={cn(
-                  'text-xs',
-                  colorScheme === 'dark' ? 'text-white/40' : 'text-slate-500'
-                )}
-              >
-                Longer
-              </Text>
-            </View>
-          </GlassCard>
-
-          <GlassCard className="p-6 mb-6">
             <View className="flex-row items-center justify-between mb-3">
               <View className="flex-row items-center flex-1">
                 <Sparkles
@@ -808,7 +597,7 @@ export default function SettingsScreen() {
                       colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
                     )}
                   >
-                    Emphasis Detection
+                    Enable Prosody Features
                   </Text>
                   <Text
                     style={{ fontFamily: 'Manrope_400Regular' }}
@@ -817,15 +606,15 @@ export default function SettingsScreen() {
                       colorScheme === 'dark' ? 'text-white/50' : 'text-slate-500'
                     )}
                   >
-                    Automatically emphasize important words
+                    Turn off for basic speech without enhancements
                   </Text>
                 </View>
               </View>
               <Switch
-                value={voiceSettings.prosody.emphasisDetection}
+                value={voiceSettings.prosody.enabled}
                 onValueChange={(value) => {
                   setVoiceSettings({
-                    prosody: { ...voiceSettings.prosody, emphasisDetection: value },
+                    prosody: { ...voiceSettings.prosody, enabled: value },
                   });
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 }}
@@ -838,50 +627,340 @@ export default function SettingsScreen() {
             </View>
           </GlassCard>
 
-          <GlassCard className="p-6 mb-6">
-            <View className="flex-row items-center justify-between mb-3">
-              <View className="flex-row items-center flex-1">
-                <Music
-                  size={24}
-                  color={colorScheme === 'dark' ? '#fff' : '#000'}
-                />
-                <View className="ml-3 flex-1">
+          {voiceSettings.prosody.enabled ? (
+            <>
+              <GlassCard className="p-6 mb-6">
+                <View className="flex-row items-center mb-4">
+                  <Sparkles
+                    size={24}
+                    color={colorScheme === 'dark' ? '#fff' : '#000'}
+                  />
+                  <Text
+                    style={{ fontFamily: 'Manrope_600SemiBold' }}
+                    className={cn(
+                      'text-lg ml-3',
+                      colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
+                    )}
+                  >
+                    Voice Personality
+                  </Text>
+                </View>
+
+                <Text
+                  style={{ fontFamily: 'Manrope_400Regular' }}
+                  className={cn(
+                    'text-sm mb-4',
+                    colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
+                  )}
+                >
+                  Choose a personality that matches your content style
+                </Text>
+
+                {getAllVoiceProfiles().map((profile) => (
+                  <Pressable
+                    key={profile.id}
+                    onPress={() => {
+                      setVoiceSettings({
+                        personality: profile.id,
+                        prosody: profile.prosodySettings,
+                      });
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    }}
+                    className={cn(
+                      'p-4 rounded-xl mb-3',
+                      voiceSettings.personality === profile.id
+                        ? 'bg-purple-500/20 border-2 border-purple-500'
+                        : colorScheme === 'dark'
+                        ? 'bg-white/5'
+                        : 'bg-black/5'
+                    )}
+                  >
+                    <View className="flex-row items-center justify-between mb-2">
+                      <Text
+                        style={{ fontFamily: 'Manrope_600SemiBold' }}
+                        className={cn(
+                          'text-base',
+                          voiceSettings.personality === profile.id
+                            ? 'text-purple-400'
+                            : colorScheme === 'dark'
+                            ? 'text-white'
+                            : 'text-slate-900'
+                        )}
+                      >
+                        {voiceSettings.appLanguage === 'en' ? profile.name : profile.nameFr}
+                      </Text>
+                      {voiceSettings.personality === profile.id && (
+                        <View className="bg-purple-500 px-2 py-1 rounded-full">
+                          <Text
+                            style={{ fontFamily: 'Manrope_600SemiBold' }}
+                            className="text-white text-xs"
+                          >
+                            Active
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text
+                      style={{ fontFamily: 'Manrope_400Regular' }}
+                      className={cn(
+                        'text-sm mb-2',
+                        colorScheme === 'dark' ? 'text-white/70' : 'text-slate-600'
+                      )}
+                    >
+                      {voiceSettings.appLanguage === 'en'
+                        ? profile.description
+                        : profile.descriptionFr}
+                    </Text>
+                    <Text
+                      style={{ fontFamily: 'Manrope_400Regular' }}
+                      className={cn(
+                        'text-xs italic',
+                        colorScheme === 'dark' ? 'text-white/50' : 'text-slate-500'
+                      )}
+                    >
+                      "{profile.sampleText.substring(0, 80)}..."
+                    </Text>
+                  </Pressable>
+                ))}
+              </GlassCard>
+
+              <GlassCard className="p-6 mb-6">
+                <View className="flex-row items-center justify-between mb-4">
+                  <View className="flex-row items-center">
+                    <Zap size={24} color={colorScheme === 'dark' ? '#fff' : '#000'} />
+                    <Text
+                      style={{ fontFamily: 'Manrope_600SemiBold' }}
+                      className={cn(
+                        'text-lg ml-3',
+                        colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
+                      )}
+                    >
+                      Prosody Intensity
+                    </Text>
+                  </View>
                   <Text
                     style={{ fontFamily: 'Manrope_600SemiBold' }}
                     className={cn(
                       'text-base',
-                      colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
+                      colorScheme === 'dark' ? 'text-white/80' : 'text-slate-700'
                     )}
                   >
-                    Natural Pacing
+                    {Math.round(voiceSettings.prosody.intensity * 100)}%
+                  </Text>
+                </View>
+
+                <Text
+                  style={{ fontFamily: 'Manrope_400Regular' }}
+                  className={cn(
+                    'text-sm mb-3',
+                    colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
+                  )}
+                >
+                  Control how dramatic the voice intonation and emphasis should be
+                </Text>
+
+                <Slider
+                  value={voiceSettings.prosody.intensity}
+                  onValueChange={(value) => {
+                    setVoiceSettings({
+                      prosody: { ...voiceSettings.prosody, intensity: value },
+                    });
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                  minimumValue={0.0}
+                  maximumValue={1.0}
+                  step={0.1}
+                  minimumTrackTintColor="#8b5cf6"
+                  maximumTrackTintColor={colorScheme === 'dark' ? '#333' : '#ddd'}
+                  thumbTintColor="#8b5cf6"
+                />
+
+                <View className="flex-row justify-between mt-2">
+                  <Text
+                    style={{ fontFamily: 'Manrope_400Regular' }}
+                    className={cn(
+                      'text-xs',
+                      colorScheme === 'dark' ? 'text-white/40' : 'text-slate-500'
+                    )}
+                  >
+                    Subtle
                   </Text>
                   <Text
                     style={{ fontFamily: 'Manrope_400Regular' }}
                     className={cn(
-                      'text-xs mt-0.5',
-                      colorScheme === 'dark' ? 'text-white/50' : 'text-slate-500'
+                      'text-xs',
+                      colorScheme === 'dark' ? 'text-white/40' : 'text-slate-500'
                     )}
                   >
-                    Add breathing pauses in long sentences
+                    Dramatic
                   </Text>
                 </View>
-              </View>
-              <Switch
-                value={voiceSettings.prosody.naturalPacing}
-                onValueChange={(value) => {
-                  setVoiceSettings({
-                    prosody: { ...voiceSettings.prosody, naturalPacing: value },
-                  });
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                }}
-                trackColor={{
-                  false: colorScheme === 'dark' ? '#333' : '#ddd',
-                  true: '#8b5cf6',
-                }}
-                thumbColor="#fff"
-              />
-            </View>
-          </GlassCard>
+              </GlassCard>
+
+              <GlassCard className="p-6 mb-6">
+                <View className="flex-row items-center justify-between mb-4">
+                  <View className="flex-row items-center">
+                    <Music size={24} color={colorScheme === 'dark' ? '#fff' : '#000'} />
+                    <Text
+                      style={{ fontFamily: 'Manrope_600SemiBold' }}
+                      className={cn(
+                        'text-lg ml-3',
+                        colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
+                      )}
+                    >
+                      Pause Duration
+                    </Text>
+                  </View>
+                  <Text
+                    style={{ fontFamily: 'Manrope_600SemiBold' }}
+                    className={cn(
+                      'text-base',
+                      colorScheme === 'dark' ? 'text-white/80' : 'text-slate-700'
+                    )}
+                  >
+                    {voiceSettings.prosody.pauseMultiplier.toFixed(1)}x
+                  </Text>
+                </View>
+
+                <Text
+                  style={{ fontFamily: 'Manrope_400Regular' }}
+                  className={cn(
+                    'text-sm mb-3',
+                    colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
+                  )}
+                >
+                  Adjust natural pauses between sentences and phrases
+                </Text>
+
+                <Slider
+                  value={voiceSettings.prosody.pauseMultiplier}
+                  onValueChange={(value) => {
+                    setVoiceSettings({
+                      prosody: { ...voiceSettings.prosody, pauseMultiplier: value },
+                    });
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                  minimumValue={0.5}
+                  maximumValue={2.0}
+                  step={0.1}
+                  minimumTrackTintColor="#8b5cf6"
+                  maximumTrackTintColor={colorScheme === 'dark' ? '#333' : '#ddd'}
+                  thumbTintColor="#8b5cf6"
+                />
+
+                <View className="flex-row justify-between mt-2">
+                  <Text
+                    style={{ fontFamily: 'Manrope_400Regular' }}
+                    className={cn(
+                      'text-xs',
+                      colorScheme === 'dark' ? 'text-white/40' : 'text-slate-500'
+                    )}
+                  >
+                    Shorter
+                  </Text>
+                  <Text
+                    style={{ fontFamily: 'Manrope_400Regular' }}
+                    className={cn(
+                      'text-xs',
+                      colorScheme === 'dark' ? 'text-white/40' : 'text-slate-500'
+                    )}
+                  >
+                    Longer
+                  </Text>
+                </View>
+              </GlassCard>
+
+              <GlassCard className="p-6 mb-6">
+                <View className="flex-row items-center justify-between mb-3">
+                  <View className="flex-row items-center flex-1">
+                    <Sparkles
+                      size={24}
+                      color={colorScheme === 'dark' ? '#fff' : '#000'}
+                    />
+                    <View className="ml-3 flex-1">
+                      <Text
+                        style={{ fontFamily: 'Manrope_600SemiBold' }}
+                        className={cn(
+                          'text-base',
+                          colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}
+                      >
+                        Emphasis Detection
+                      </Text>
+                      <Text
+                        style={{ fontFamily: 'Manrope_400Regular' }}
+                        className={cn(
+                          'text-xs mt-0.5',
+                          colorScheme === 'dark' ? 'text-white/50' : 'text-slate-500'
+                        )}
+                      >
+                        Automatically emphasize important words
+                      </Text>
+                    </View>
+                  </View>
+                  <Switch
+                    value={voiceSettings.prosody.emphasisDetection}
+                    onValueChange={(value) => {
+                      setVoiceSettings({
+                        prosody: { ...voiceSettings.prosody, emphasisDetection: value },
+                      });
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                    trackColor={{
+                      false: colorScheme === 'dark' ? '#333' : '#ddd',
+                      true: '#8b5cf6',
+                    }}
+                    thumbColor="#fff"
+                  />
+                </View>
+              </GlassCard>
+
+              <GlassCard className="p-6 mb-6">
+                <View className="flex-row items-center justify-between mb-3">
+                  <View className="flex-row items-center flex-1">
+                    <Music
+                      size={24}
+                      color={colorScheme === 'dark' ? '#fff' : '#000'}
+                    />
+                    <View className="ml-3 flex-1">
+                      <Text
+                        style={{ fontFamily: 'Manrope_600SemiBold' }}
+                        className={cn(
+                          'text-base',
+                          colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
+                        )}
+                      >
+                        Natural Pacing
+                      </Text>
+                      <Text
+                        style={{ fontFamily: 'Manrope_400Regular' }}
+                        className={cn(
+                          'text-xs mt-0.5',
+                          colorScheme === 'dark' ? 'text-white/50' : 'text-slate-500'
+                        )}
+                      >
+                        Add breathing pauses in long sentences
+                      </Text>
+                    </View>
+                  </View>
+                  <Switch
+                    value={voiceSettings.prosody.naturalPacing}
+                    onValueChange={(value) => {
+                      setVoiceSettings({
+                        prosody: { ...voiceSettings.prosody, naturalPacing: value },
+                      });
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                    trackColor={{
+                      false: colorScheme === 'dark' ? '#333' : '#ddd',
+                      true: '#8b5cf6',
+                    }}
+                    thumbColor="#fff"
+                  />
+                </View>
+              </GlassCard>
+            </>
+          ) : null}
 
           <AnimatedButton
             title={t.testVoice}
