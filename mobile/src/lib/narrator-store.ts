@@ -65,6 +65,7 @@ export const useNarratorStore = create<NarratorStore>((set, get) => ({
     pitch: 1.0,
     rate: 1.0,
     volume: 1.0,
+    appLanguage: 'en',
   },
   narrationState: {
     isPlaying: false,

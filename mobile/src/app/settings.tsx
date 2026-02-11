@@ -10,20 +10,40 @@ import { AnimatedButton } from '@/components/AnimatedButton';
 import { useNarratorStore } from '@/lib/narrator-store';
 import { useFonts, PlayfairDisplay_700Bold } from '@expo-google-fonts/playfair-display';
 import { Manrope_400Regular, Manrope_600SemiBold } from '@expo-google-fonts/manrope';
+import { useTranslations } from '@/lib/i18n';
+import type { AppLanguage } from '@/lib/i18n';
 
 function cn(...classes: (string | undefined | false)[]) {
   return classes.filter(Boolean).join(' ');
 }
 
-const languages = [
+const voiceLanguages = [
   { label: 'English (US)', value: 'en-US' },
   { label: 'English (UK)', value: 'en-GB' },
   { label: 'Spanish', value: 'es-ES' },
-  { label: 'French', value: 'fr-FR' },
+  { label: 'French (France)', value: 'fr-FR' },
+  { label: 'French (Canada)', value: 'fr-CA' },
   { label: 'German', value: 'de-DE' },
   { label: 'Italian', value: 'it-IT' },
   { label: 'Japanese', value: 'ja-JP' },
   { label: 'Korean', value: 'ko-KR' },
+];
+
+const appLanguages: { label: string; value: AppLanguage }[] = [
+  { label: 'English', value: 'en' },
+  { label: 'Français (France)', value: 'fr-FR' },
+  { label: 'Français (Canada)', value: 'fr-CA' },
+];
+
+const ocrLanguages = [
+  { label: 'English', value: 'en' },
+  { label: 'Spanish', value: 'es' },
+  { label: 'French', value: 'fr' },
+  { label: 'French (Canada)', value: 'fr-CA' },
+  { label: 'German', value: 'de' },
+  { label: 'Chinese', value: 'zh' },
+  { label: 'Japanese', value: 'ja' },
+  { label: 'Korean', value: 'ko' },
 ];
 
 interface Voice {
@@ -41,6 +61,9 @@ export default function SettingsScreen() {
   const setExtractionSettings = useNarratorStore((s) => s.setExtractionSettings);
   const [availableVoices, setAvailableVoices] = useState<Voice[]>([]);
   const [enhancedVoices, setEnhancedVoices] = useState<Voice[]>([]);
+
+  // Get translations based on app language
+  const t = useTranslations(voiceSettings.appLanguage);
 
   const [fontsLoaded] = useFonts({
     PlayfairDisplay_700Bold,
@@ -71,7 +94,7 @@ export default function SettingsScreen() {
   };
 
   const testVoice = () => {
-    Speech.speak('Hello! This is how I will sound when reading your stories. The narrator uses natural pauses and intonation for a more human-like experience.', {
+    Speech.speak(t.testVoiceSample, {
       language: voiceSettings.language,
       pitch: voiceSettings.pitch,
       rate: voiceSettings.rate,
@@ -128,7 +151,7 @@ export default function SettingsScreen() {
                 colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
               )}
             >
-              Settings
+              {t.settings}
             </Text>
             <Text
               style={{ fontFamily: 'Manrope_400Regular' }}
@@ -137,7 +160,7 @@ export default function SettingsScreen() {
                 colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
               )}
             >
-              Customize your narration experience
+              {t.customizeNarration}
             </Text>
           </View>
 
@@ -154,9 +177,19 @@ export default function SettingsScreen() {
                   colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
                 )}
               >
-                Language
+                {t.appLanguage}
               </Text>
             </View>
+
+            <Text
+              style={{ fontFamily: 'Manrope_400Regular' }}
+              className={cn(
+                'text-sm mb-3',
+                colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
+              )}
+            >
+              {t.appLanguageDescription}
+            </Text>
 
             <ScrollView
               horizontal
@@ -164,7 +197,52 @@ export default function SettingsScreen() {
               contentContainerClassName="gap-2"
               style={{ flexGrow: 0 }}
             >
-              {languages.map((lang) => (
+              {appLanguages.map((lang) => (
+                <AnimatedButton
+                  key={lang.value}
+                  title={lang.label}
+                  variant={voiceSettings.appLanguage === lang.value ? 'primary' : 'secondary'}
+                  size="sm"
+                  onPress={() => setVoiceSettings({ appLanguage: lang.value })}
+                />
+              ))}
+            </ScrollView>
+          </GlassCard>
+
+          <GlassCard className="p-6 mb-6">
+            <View className="flex-row items-center mb-4">
+              <Languages
+                size={24}
+                color={colorScheme === 'dark' ? '#fff' : '#000'}
+              />
+              <Text
+                style={{ fontFamily: 'Manrope_600SemiBold' }}
+                className={cn(
+                  'text-lg ml-3',
+                  colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
+                )}
+              >
+                {t.language}
+              </Text>
+            </View>
+
+            <Text
+              style={{ fontFamily: 'Manrope_400Regular' }}
+              className={cn(
+                'text-sm mb-3',
+                colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
+              )}
+            >
+              Voice language for narration
+            </Text>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerClassName="gap-2"
+              style={{ flexGrow: 0 }}
+            >
+              {voiceLanguages.map((lang) => (
                 <AnimatedButton
                   key={lang.value}
                   title={lang.label}
@@ -190,7 +268,7 @@ export default function SettingsScreen() {
                     colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
                   )}
                 >
-                  Pitch
+                  {t.pitch}
                 </Text>
               </View>
               <Text
@@ -223,7 +301,7 @@ export default function SettingsScreen() {
                   colorScheme === 'dark' ? 'text-white/40' : 'text-slate-500'
                 )}
               >
-                Lower
+                {t.lower}
               </Text>
               <Text
                 style={{ fontFamily: 'Manrope_400Regular' }}
@@ -232,7 +310,7 @@ export default function SettingsScreen() {
                   colorScheme === 'dark' ? 'text-white/40' : 'text-slate-500'
                 )}
               >
-                Higher
+                {t.higher}
               </Text>
             </View>
           </GlassCard>
@@ -251,7 +329,7 @@ export default function SettingsScreen() {
                     colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
                   )}
                 >
-                  Speed
+                  {t.speed}
                 </Text>
               </View>
               <Text
@@ -284,7 +362,7 @@ export default function SettingsScreen() {
                   colorScheme === 'dark' ? 'text-white/40' : 'text-slate-500'
                 )}
               >
-                Slower
+                {t.slower}
               </Text>
               <Text
                 style={{ fontFamily: 'Manrope_400Regular' }}
@@ -293,7 +371,7 @@ export default function SettingsScreen() {
                   colorScheme === 'dark' ? 'text-white/40' : 'text-slate-500'
                 )}
               >
-                Faster
+                {t.faster}
               </Text>
             </View>
           </GlassCard>
@@ -312,7 +390,7 @@ export default function SettingsScreen() {
                     colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
                   )}
                 >
-                  Volume
+                  {t.volume}
                 </Text>
               </View>
               <Text
@@ -345,7 +423,7 @@ export default function SettingsScreen() {
                   colorScheme === 'dark' ? 'text-white/40' : 'text-slate-500'
                 )}
               >
-                Quiet
+                {t.quiet}
               </Text>
               <Text
                 style={{ fontFamily: 'Manrope_400Regular' }}
@@ -354,7 +432,7 @@ export default function SettingsScreen() {
                   colorScheme === 'dark' ? 'text-white/40' : 'text-slate-500'
                 )}
               >
-                Loud
+                {t.loud}
               </Text>
             </View>
           </GlassCard>
@@ -373,7 +451,7 @@ export default function SettingsScreen() {
                     colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
                   )}
                 >
-                  Voice Selection
+                  {t.voiceSelection}
                 </Text>
               </View>
 
@@ -384,7 +462,7 @@ export default function SettingsScreen() {
                   colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
                 )}
               >
-                Enhanced quality voices for natural narration
+                {t.enhancedQualityVoices}
               </Text>
 
               <ScrollView
@@ -433,7 +511,7 @@ export default function SettingsScreen() {
           )}
 
           <AnimatedButton
-            title="Test Voice"
+            title={t.testVoice}
             icon={<Play size={20} color="#fff" fill="#fff" />}
             onPress={testVoice}
           />
@@ -446,7 +524,7 @@ export default function SettingsScreen() {
                 colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
               )}
             >
-              Content Extraction
+              {t.contentExtraction}
             </Text>
             <Text
               style={{ fontFamily: 'Manrope_400Regular' }}
@@ -455,7 +533,7 @@ export default function SettingsScreen() {
                 colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
               )}
             >
-              Configure how content is extracted
+              {t.configureExtraction}
             </Text>
           </View>
 
@@ -474,7 +552,7 @@ export default function SettingsScreen() {
                       colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
                     )}
                   >
-                    Clipboard Monitoring
+                    {t.clipboardMonitoring}
                   </Text>
                   <Text
                     style={{ fontFamily: 'Manrope_400Regular' }}
@@ -483,7 +561,7 @@ export default function SettingsScreen() {
                       colorScheme === 'dark' ? 'text-white/50' : 'text-slate-500'
                     )}
                   >
-                    Auto-detect URLs copied to clipboard
+                    {t.clipboardDescription}
                   </Text>
                 </View>
               </View>
@@ -517,7 +595,7 @@ export default function SettingsScreen() {
                       colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
                     )}
                   >
-                    Auto-Fetch URLs
+                    {t.autoFetchURLs}
                   </Text>
                   <Text
                     style={{ fontFamily: 'Manrope_400Regular' }}
@@ -526,7 +604,7 @@ export default function SettingsScreen() {
                       colorScheme === 'dark' ? 'text-white/50' : 'text-slate-500'
                     )}
                   >
-                    Automatically fetch content when URL detected
+                    {t.autoFetchDescription}
                   </Text>
                 </View>
               </View>
@@ -558,7 +636,7 @@ export default function SettingsScreen() {
                   colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
                 )}
               >
-                OCR Language
+                {t.ocrLanguage}
               </Text>
             </View>
 
@@ -569,7 +647,7 @@ export default function SettingsScreen() {
                 colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
               )}
             >
-              Select language for image text recognition
+              {t.ocrLanguageDescription}
             </Text>
 
             <ScrollView
@@ -578,15 +656,7 @@ export default function SettingsScreen() {
               contentContainerClassName="gap-2"
               style={{ flexGrow: 0 }}
             >
-              {[
-                { label: 'English', value: 'en' },
-                { label: 'Spanish', value: 'es' },
-                { label: 'French', value: 'fr' },
-                { label: 'German', value: 'de' },
-                { label: 'Chinese', value: 'zh' },
-                { label: 'Japanese', value: 'ja' },
-                { label: 'Korean', value: 'ko' },
-              ].map((lang) => (
+              {ocrLanguages.map((lang) => (
                 <AnimatedButton
                   key={lang.value}
                   title={lang.label}

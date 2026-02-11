@@ -14,11 +14,13 @@ export interface Story {
 }
 
 export interface VoiceSettings {
-  language: string;
+  language: string; // Voice language (e.g., en-US, fr-FR, fr-CA)
   pitch: number;
   rate: number;
   volume: number;
   voice?: string; // Voice identifier for native voice selection
+  appLanguage: 'en' | 'fr-FR' | 'fr-CA'; // App UI language
+  detectedLanguage?: string; // Last detected content language
 }
 
 export interface RecordingState {

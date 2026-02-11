@@ -7,6 +7,92 @@ export interface FetchedContent {
   text: string;
   title?: string;
   url: string;
+  detectedLanguage?: string;
+}
+
+/**
+ * Canadian French specific words and patterns
+ */
+const CANADIAN_FRENCH_INDICATORS = [
+  // Common Quebec French words
+  'char', 'magasiner', 'blonde', 'chum', 'dépanneur',
+  'tabarnouche', 'tabarnak', 'câlisse', 'maudit', 'barnak',
+  // Quebec specific terms
+  'poutine', 'tuque', 'cabane à sucre', 'érablière',
+  // Informal expressions
+  'pantoute', 'icitte', 'astheure', 'tantôt',
+  // Numbers with spaces (Quebec style)
+  /\d\s\d{3}/, // e.g., "1 000" instead of "1000"
+];
+
+/**
+ * Detects if text contains Canadian French patterns
+ */
+function hasCanadianFrenchPatterns(text: string): boolean {
+  const lowerText = text.toLowerCase();
+
+  for (const indicator of CANADIAN_FRENCH_INDICATORS) {
+    if (typeof indicator === 'string') {
+      if (lowerText.includes(indicator)) {
+        return true;
+      }
+    } else if (indicator instanceof RegExp) {
+      if (indicator.test(text)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Detects if text is in French (any variant)
+ */
+function isFrench(text: string): boolean {
+  // Common French words and patterns
+  const frenchIndicators = [
+    'le ', 'la ', 'les ', 'un ', 'une ', 'des ',
+    'est ', 'sont ', 'était ', 'être ',
+    'que ', 'qui ', 'quoi ', 'dont ',
+    'avec ', 'dans ', 'pour ', 'sans ',
+    'français', 'française',
+  ];
+
+  const lowerText = text.toLowerCase();
+  let matches = 0;
+
+  for (const indicator of frenchIndicators) {
+    if (lowerText.includes(indicator)) {
+      matches++;
+    }
+  }
+
+  // If we find 3 or more French indicators, it's likely French
+  return matches >= 3;
+}
+
+/**
+ * Detects the language of the text content
+ * Returns ISO language code (en-US, fr-FR, fr-CA, etc.)
+ */
+export function detectLanguage(text: string): string {
+  if (!text || text.length < 50) {
+    return 'en-US'; // Default to English
+  }
+
+  // Check if it's French first
+  if (isFrench(text)) {
+    // Check if it's Canadian French
+    if (hasCanadianFrenchPatterns(text)) {
+      return 'fr-CA';
+    }
+    return 'fr-FR';
+  }
+
+  // Default to English for now
+  // In a production app, you could use a proper language detection library
+  return 'en-US';
 }
 
 /**
@@ -153,10 +239,14 @@ export async function fetchContentFromURL(url: string): Promise<FetchedContent> 
       throw new Error('No readable content found on this page');
     }
 
+    // Detect language
+    const detectedLanguage = detectLanguage(text);
+
     return {
       text,
       title,
       url: normalizedURL,
+      detectedLanguage,
     };
   } catch (error) {
     if (error instanceof Error) {
