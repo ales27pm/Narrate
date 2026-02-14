@@ -131,8 +131,17 @@ export default function LibraryScreen() {
                 onSuccess: () => {
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 },
-                onError: () => {
-                  Alert.alert('Error', 'Failed to delete story. Please try again.');
+                onError: (error) => {
+                  const isOffline = error instanceof Error && error.message === 'OFFLINE';
+                  if (isOffline) {
+                    Alert.alert(
+                      'Offline Mode',
+                      'Cannot delete from cloud while offline. The story will remain in local storage.',
+                      [{ text: 'OK' }]
+                    );
+                  } else {
+                    Alert.alert('Error', 'Failed to delete story. Please try again.');
+                  }
                 }
               });
             }

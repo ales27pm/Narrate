@@ -347,20 +347,29 @@ export default function NarratorScreen() {
         router.push('/library');
       },
       onError: (error) => {
-        // Show warning that backend save failed but local save succeeded
-        Alert.alert(
-          'Saved Locally',
-          'Story saved to your device, but could not sync to cloud. It will sync when connection is restored.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                router.push('/library');
+        // Check if it's an offline error
+        const isOffline = error instanceof Error && error.message === 'OFFLINE';
+
+        if (isOffline) {
+          // Offline mode - just show success, no warning needed
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          router.push('/library');
+        } else {
+          // Other error - show warning
+          Alert.alert(
+            'Saved Locally',
+            'Story saved to your device, but could not sync to cloud. It will sync when connection is restored.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                  router.push('/library');
+                }
               }
-            }
-          ]
-        );
+            ]
+          );
+        }
       }
     });
   };
