@@ -13,8 +13,35 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
+// Type definitions for native module
+interface NativeWordBoundaryEvent {
+  word: string;
+  charIndex: number;
+  charLength: number;
+  wordIndex?: number;
+}
+
+interface NativeSpeechEvent {
+  utteranceId: string;
+}
+
+interface NativeSpeechTurboModule {
+  speak: (text: string, options: NarrationOptions) => Promise<string>;
+  pause: () => Promise<void>;
+  resume: () => Promise<void>;
+  stop: () => Promise<void>;
+  getAvailableVoices: () => Promise<Voice[]>;
+  setAudioCategory?: (category: string) => Promise<void>;
+  onWordBoundary: (callback: (event: NativeWordBoundaryEvent) => void) => () => void;
+  onSpeechStart: (callback: (event: NativeSpeechEvent) => void) => () => void;
+  onSpeechEnd: (callback: (event: NativeSpeechEvent) => void) => () => void;
+  onSpeechError: (callback: (event: { error: string }) => void) => () => void;
+  onSpeechPause: (callback: (event: NativeSpeechEvent) => void) => () => void;
+  onSpeechResume: (callback: (event: NativeSpeechEvent) => void) => () => void;
+}
+
 // Import the TurboModule (will work after native compilation)
-let NativeSpeechTurbo: any = null;
+let NativeSpeechTurbo: NativeSpeechTurboModule | null = null;
 
 try {
   // Try to import the native module
@@ -81,8 +108,10 @@ export function useNarratorTurbo() {
 
     const cleanups: (() => void)[] = [];
 
+    if (!NativeSpeechTurbo) return;
+
     // Word boundary listener
-    const unsubWordBoundary = NativeSpeechTurbo.onWordBoundary((event: any) => {
+    const unsubWordBoundary = NativeSpeechTurbo.onWordBoundary((event) => {
       setState((prev) => ({
         ...prev,
         currentWord: event.word,
@@ -163,13 +192,13 @@ export function useNarratorTurbo() {
   }, [isAvailable]);
 
   // Load available voices
-  const loadVoices = useCallback(async (language?: string) => {
-    if (!isAvailable) return [];
+  const loadVoices = useCallback(async () => {
+    if (!isAvailable || !NativeSpeechTurbo) return [];
 
     try {
-      const result = await NativeSpeechTurbo.getAvailableVoices(language);
-      setAvailableVoices(result.voices);
-      return result.voices;
+      const result = await NativeSpeechTurbo.getAvailableVoices();
+      setAvailableVoices(result);
+      return result;
     } catch (error) {
       console.error('Failed to load voices:', error);
       return [];
@@ -179,7 +208,7 @@ export function useNarratorTurbo() {
   // Speak text
   const speak = useCallback(
     async (text: string, options: NarrationOptions = {}) => {
-      if (!isAvailable) {
+      if (!isAvailable || !NativeSpeechTurbo) {
         throw new Error('NarratorTurboModule not available. Compile native code first.');
       }
 
@@ -203,7 +232,7 @@ export function useNarratorTurbo() {
 
   // Stop speech
   const stop = useCallback(async () => {
-    if (!isAvailable) return;
+    if (!isAvailable || !NativeSpeechTurbo) return;
 
     try {
       await NativeSpeechTurbo.stop();
@@ -214,11 +243,11 @@ export function useNarratorTurbo() {
 
   // Pause speech (iOS only)
   const pause = useCallback(async () => {
-    if (!isAvailable || Platform.OS !== 'ios') return;
+    if (!isAvailable || !NativeSpeechTurbo || Platform.OS !== 'ios') return false;
 
     try {
-      const result = await NativeSpeechTurbo.pause();
-      return result.paused || false;
+      await NativeSpeechTurbo.pause();
+      return true;
     } catch (error) {
       console.error('Failed to pause:', error);
       return false;
@@ -227,11 +256,11 @@ export function useNarratorTurbo() {
 
   // Resume speech (iOS only)
   const resume = useCallback(async () => {
-    if (!isAvailable || Platform.OS !== 'ios') return;
+    if (!isAvailable || !NativeSpeechTurbo || Platform.OS !== 'ios') return false;
 
     try {
-      const result = await NativeSpeechTurbo.resume();
-      return result.resumed || false;
+      await NativeSpeechTurbo.resume();
+      return true;
     } catch (error) {
       console.error('Failed to resume:', error);
       return false;
@@ -240,14 +269,10 @@ export function useNarratorTurbo() {
 
   // Configure audio session (iOS only)
   const configureAudioSession = useCallback(async () => {
-    if (!isAvailable || Platform.OS !== 'ios') return;
+    if (!isAvailable || !NativeSpeechTurbo || Platform.OS !== 'ios' || !NativeSpeechTurbo.setAudioCategory) return;
 
     try {
-      await NativeSpeechTurbo.setAudioCategory({
-        category: 'playback',
-        mode: 'spokenAudio',
-        options: ['duckOthers', 'allowBluetooth', 'allowBluetoothA2DP'],
-      });
+      await NativeSpeechTurbo.setAudioCategory('playback');
     } catch (error) {
       console.error('Failed to configure audio session:', error);
     }
@@ -282,17 +307,20 @@ export async function getBestVoiceForLanguage(language: string): Promise<Voice |
   if (!NativeSpeechTurbo) return null;
 
   try {
-    const result = await NativeSpeechTurbo.getAvailableVoices(language);
-    const voices = result.voices as Voice[];
+    const voices = await NativeSpeechTurbo.getAvailableVoices();
+
+    // Filter by language
+    const matchingVoices = voices.filter((v) => v.language.startsWith(language));
+    if (matchingVoices.length === 0) return null;
 
     // Prioritize premium > enhanced > default
-    const premiumVoice = voices.find((v) => v.quality === 'premium');
+    const premiumVoice = matchingVoices.find((v) => v.quality === 'premium');
     if (premiumVoice) return premiumVoice;
 
-    const enhancedVoice = voices.find((v) => v.quality === 'enhanced');
+    const enhancedVoice = matchingVoices.find((v) => v.quality === 'enhanced');
     if (enhancedVoice) return enhancedVoice;
 
-    return voices[0] || null;
+    return matchingVoices[0] || null;
   } catch (error) {
     console.error('Failed to get best voice:', error);
     return null;

@@ -346,10 +346,21 @@ export default function NarratorScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.push('/library');
       },
-      onError: () => {
-        // Still show success for local save even if backend fails
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        router.push('/library');
+      onError: (error) => {
+        // Show warning that backend save failed but local save succeeded
+        Alert.alert(
+          'Saved Locally',
+          'Story saved to your device, but could not sync to cloud. It will sync when connection is restored.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                router.push('/library');
+              }
+            }
+          ]
+        );
       }
     });
   };
@@ -616,11 +627,15 @@ export default function NarratorScreen() {
                       color={colorScheme === 'dark' ? '#fff' : '#000'}
                     />
                   </Pressable>
-                  <Pressable onPress={saveStory} className="p-2">
-                    <Bookmark
-                      size={20}
-                      color={colorScheme === 'dark' ? '#fff' : '#000'}
-                    />
+                  <Pressable onPress={saveStory} className="p-2" disabled={createScan.isPending}>
+                    {createScan.isPending ? (
+                      <ActivityIndicator size="small" color={colorScheme === 'dark' ? '#8b5cf6' : '#7c3aed'} />
+                    ) : (
+                      <Bookmark
+                        size={20}
+                        color={colorScheme === 'dark' ? '#fff' : '#000'}
+                      />
+                    )}
                   </Pressable>
                 </View>
               </View>
