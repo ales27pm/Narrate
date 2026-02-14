@@ -1,0 +1,22 @@
+{
+  "name": "narrator-turbo-module",
+  "version": "1.0.0",
+  "description": "Advanced on-device TTS module with TurboModule architecture",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "echo \"No tests yet\""
+  },
+  "keywords": [
+    "react-native",
+    "turbomodule",
+    "tts",
+    "speech",
+    "narrator"
+  ],
+  "author": "Vibecode",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*"
+  }
+}
