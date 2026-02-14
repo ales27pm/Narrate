@@ -31,7 +31,6 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { router } from 'expo-router';
-import { useCreateScan, type ScanType } from '@/lib/api/scans';
 
 function cn(...classes: (string | undefined | false)[]) {
   return classes.filter(Boolean).join(' ');
@@ -56,8 +55,6 @@ export default function NarratorScreen() {
   const addStory = useNarratorStore((s) => s.addStory);
   const sharedContent = useNarratorStore((s) => s.sharedContent);
   const clearSharedContent = useNarratorStore((s) => s.clearSharedContent);
-
-  const createScan = useCreateScan();
 
   const [fontsLoaded] = useFonts({
     PlayfairDisplay_700Bold,
@@ -315,7 +312,7 @@ export default function NarratorScreen() {
     const wordCount = words.length;
     const title = fetchedURLTitle || text.slice(0, 50) + (text.length > 50 ? '...' : '');
 
-    // Save to local MMKV store
+    // Save to local MMKV store (100% on-device)
     addStory({
       title,
       content: text,
@@ -324,54 +321,8 @@ export default function NarratorScreen() {
       wordCount,
     });
 
-    // Determine scan type based on context
-    let scanType: ScanType = 'manual';
-    if (extractionPreview) {
-      scanType = 'ocr'; // From image extraction
-    } else if (fetchedURLTitle) {
-      scanType = 'web'; // From URL fetch
-    }
-
-    // Save to backend database
-    createScan.mutate({
-      type: scanType,
-      content: text,
-      originalUrl: fetchedURLTitle ? text : null,
-      metadata: {
-        title,
-        confidence: extractionPreview?.metadata?.confidence,
-      },
-    }, {
-      onSuccess: () => {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        router.push('/library');
-      },
-      onError: (error) => {
-        // Check if it's an offline error
-        const isOffline = error instanceof Error && error.message === 'OFFLINE';
-
-        if (isOffline) {
-          // Offline mode - just show success, no warning needed
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          router.push('/library');
-        } else {
-          // Other error - show warning
-          Alert.alert(
-            'Saved Locally',
-            'Story saved to your device, but could not sync to cloud. It will sync when connection is restored.',
-            [
-              {
-                text: 'OK',
-                onPress: () => {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                  router.push('/library');
-                }
-              }
-            ]
-          );
-        }
-      }
-    });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    router.push('/library');
   };
 
   const importDocument = async () => {
@@ -636,15 +587,11 @@ export default function NarratorScreen() {
                       color={colorScheme === 'dark' ? '#fff' : '#000'}
                     />
                   </Pressable>
-                  <Pressable onPress={saveStory} className="p-2" disabled={createScan.isPending}>
-                    {createScan.isPending ? (
-                      <ActivityIndicator size="small" color={colorScheme === 'dark' ? '#8b5cf6' : '#7c3aed'} />
-                    ) : (
-                      <Bookmark
-                        size={20}
-                        color={colorScheme === 'dark' ? '#fff' : '#000'}
-                      />
-                    )}
+                  <Pressable onPress={saveStory} className="p-2">
+                    <Bookmark
+                      size={20}
+                      color={colorScheme === 'dark' ? '#fff' : '#000'}
+                    />
                   </Pressable>
                 </View>
               </View>

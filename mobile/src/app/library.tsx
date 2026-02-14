@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Pressable, useColorScheme, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, Pressable, useColorScheme, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { BookOpen, Heart, Search, Trash2, Play, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react-native';
+import { BookOpen, Heart, Search, Trash2, Play } from 'lucide-react-native';
 import { GlassCard } from '@/components/GlassCard';
 import { useNarratorStore } from '@/lib/narrator-store';
 import { useFonts, PlayfairDisplay_700Bold } from '@expo-google-fonts/playfair-display';
@@ -16,7 +16,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import type { Story, StoryCategory } from '@/lib/types';
-import { useScans, useDeleteScan, type Scan } from '@/lib/api/scans';
 
 function cn(...classes: (string | undefined | false)[]) {
   return classes.filter(Boolean).join(' ');
@@ -56,16 +55,11 @@ export default function LibraryScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<StoryCategory | 'all'>('all');
 
-  // Local storage (fallback)
-  const localStories = useNarratorStore((s) => s.stories);
+  const stories = useNarratorStore((s) => s.stories);
   const loadStories = useNarratorStore((s) => s.loadStories);
   const deleteStory = useNarratorStore((s) => s.deleteStory);
   const toggleFavorite = useNarratorStore((s) => s.toggleFavorite);
   const setCurrentStory = useNarratorStore((s) => s.setCurrentStory);
-
-  // Backend database (primary)
-  const { data: scans, isLoading, error, refetch } = useScans();
-  const deleteScan = useDeleteScan();
 
   const [fontsLoaded] = useFonts({
     PlayfairDisplay_700Bold,
@@ -74,32 +68,10 @@ export default function LibraryScreen() {
   });
 
   useEffect(() => {
-    loadStories(); // Load local stories as fallback
+    loadStories();
   }, [loadStories]);
 
-  // Convert scans to story format for unified display with extended metadata
-  type ExtendedStory = Story & {
-    confidence?: number;
-    source?: string;
-  };
-
-  const scansAsStories: ExtendedStory[] = (scans || []).map((scan) => ({
-    id: scan.id.toString(),
-    title: scan.metadata?.title || scan.content.slice(0, 50) + '...',
-    content: scan.content,
-    category: 'personal' as StoryCategory,
-    isFavorite: false,
-    wordCount: scan.content.split(/\s+/).length,
-    createdAt: new Date(scan.createdAt).getTime(),
-    updatedAt: new Date(scan.createdAt).getTime(),
-    confidence: scan.metadata?.confidence,
-    source: scan.type,
-  }));
-
-  // Combine backend scans with local stories (backend takes priority)
-  const allStories: ExtendedStory[] = [...scansAsStories, ...localStories];
-
-  const filteredStories = allStories.filter((story: ExtendedStory) => {
+  const filteredStories = stories.filter((story) => {
     const matchesSearch = story.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       story.content.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || story.category === selectedCategory;
@@ -113,46 +85,8 @@ export default function LibraryScreen() {
   };
 
   const handleDelete = (id: string) => {
-    // Check if this is a backend scan (numeric ID) or local story
-    const isBackendScan = !isNaN(Number(id));
-
-    if (isBackendScan) {
-      // Delete from backend
-      Alert.alert(
-        'Delete Story',
-        'Are you sure you want to delete this story? This cannot be undone.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => {
-              deleteScan.mutate(Number(id), {
-                onSuccess: () => {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                },
-                onError: (error) => {
-                  const isOffline = error instanceof Error && error.message === 'OFFLINE';
-                  if (isOffline) {
-                    Alert.alert(
-                      'Offline Mode',
-                      'Cannot delete from cloud while offline. The story will remain in local storage.',
-                      [{ text: 'OK' }]
-                    );
-                  } else {
-                    Alert.alert('Error', 'Failed to delete story. Please try again.');
-                  }
-                }
-              });
-            }
-          }
-        ]
-      );
-    } else {
-      // Delete from local storage
-      deleteStory(id);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
+    deleteStory(id);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const handleToggleFavorite = (id: string) => {
@@ -180,50 +114,24 @@ export default function LibraryScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View className="mb-8 mt-4">
-            <View className="flex-row items-center justify-between">
-              <View className="flex-1">
-                <Text
-                  style={{ fontFamily: 'PlayfairDisplay_700Bold' }}
-                  className={cn(
-                    'text-4xl mb-2',
-                    colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
-                  )}
-                >
-                  Library
-                </Text>
-                <View className="flex-row items-center gap-2">
-                  <Text
-                    style={{ fontFamily: 'Manrope_400Regular' }}
-                    className={cn(
-                      'text-base',
-                      colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
-                    )}
-                  >
-                    {allStories.length} {allStories.length === 1 ? 'story' : 'stories'} saved
-                  </Text>
-                  {isLoading ? (
-                    <ActivityIndicator size="small" color={colorScheme === 'dark' ? '#8b5cf6' : '#7c3aed'} />
-                  ) : null}
-                </View>
-              </View>
-              {error ? (
-                <Pressable onPress={() => refetch()} className="p-2">
-                  <RefreshCw size={20} color={colorScheme === 'dark' ? '#fff' : '#000'} />
-                </Pressable>
-              ) : null}
-            </View>
-
-            {error ? (
-              <View className="mt-3 flex-row items-center bg-red-500/20 p-3 rounded-lg">
-                <AlertCircle size={16} color="#ef4444" />
-                <Text
-                  style={{ fontFamily: 'Manrope_400Regular' }}
-                  className="text-red-500 text-xs ml-2 flex-1"
-                >
-                  Failed to load from server. Showing local stories only.
-                </Text>
-              </View>
-            ) : null}
+            <Text
+              style={{ fontFamily: 'PlayfairDisplay_700Bold' }}
+              className={cn(
+                'text-4xl mb-2',
+                colorScheme === 'dark' ? 'text-white' : 'text-slate-900'
+              )}
+            >
+              Library
+            </Text>
+            <Text
+              style={{ fontFamily: 'Manrope_400Regular' }}
+              className={cn(
+                'text-base',
+                colorScheme === 'dark' ? 'text-white/60' : 'text-slate-600'
+              )}
+            >
+              {stories.length} {stories.length === 1 ? 'story' : 'stories'} saved
+            </Text>
           </View>
 
           <GlassCard className="p-4 mb-6">
@@ -360,34 +268,6 @@ export default function LibraryScreen() {
                           >
                             {getRelativeTime(story.createdAt)}
                           </Text>
-
-                          {/* Confidence Score */}
-                          {story.confidence ? (
-                            <View
-                              className={cn(
-                                'px-2 py-0.5 rounded-full',
-                                story.confidence >= 0.9
-                                  ? 'bg-green-500/20'
-                                  : story.confidence >= 0.7
-                                  ? 'bg-yellow-500/20'
-                                  : 'bg-orange-500/20'
-                              )}
-                            >
-                              <Text
-                                style={{ fontFamily: 'Manrope_600SemiBold' }}
-                                className={cn(
-                                  'text-xs',
-                                  story.confidence >= 0.9
-                                    ? 'text-green-600 dark:text-green-400'
-                                    : story.confidence >= 0.7
-                                    ? 'text-yellow-600 dark:text-yellow-400'
-                                    : 'text-orange-600 dark:text-orange-400'
-                                )}
-                              >
-                                {Math.round(story.confidence * 100)}%
-                              </Text>
-                            </View>
-                          ) : null}
 
                           {story.audioUri ? (
                             <View className="flex-row items-center">
