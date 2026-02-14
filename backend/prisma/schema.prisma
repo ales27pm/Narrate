@@ -1,0 +1,17 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Scan {
+  id          Int      @id @default(autoincrement())
+  type        String   // 'ocr', 'pdf', 'web', 'manual'
+  content     String   // The extracted/narrated text
+  originalUrl String?  // Source URL (for web/pdf)
+  metadata    String?  // JSON string for title, confidence, etc.
+  createdAt   DateTime @default(now())
+}

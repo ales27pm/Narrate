@@ -75,15 +75,43 @@ export function ContentPreview({
             >
               {title || 'Extracted Content'}
             </Text>
-            <Text
-              style={{ fontFamily: 'Manrope_400Regular' }}
-              className={cn(
-                'text-xs mt-0.5',
-                colorScheme === 'dark' ? 'text-purple-400' : 'text-purple-600'
-              )}
-            >
-              {getSourceLabel()}
-            </Text>
+            <View className="flex-row items-center mt-0.5">
+              <Text
+                style={{ fontFamily: 'Manrope_400Regular' }}
+                className={cn(
+                  'text-xs',
+                  colorScheme === 'dark' ? 'text-purple-400' : 'text-purple-600'
+                )}
+              >
+                {getSourceLabel()}
+              </Text>
+              {metadata?.confidence ? (
+                <View
+                  className={cn(
+                    'ml-2 px-2 py-0.5 rounded-full',
+                    metadata.confidence >= 0.9
+                      ? 'bg-green-500/20'
+                      : metadata.confidence >= 0.7
+                      ? 'bg-yellow-500/20'
+                      : 'bg-orange-500/20'
+                  )}
+                >
+                  <Text
+                    style={{ fontFamily: 'Manrope_600SemiBold' }}
+                    className={cn(
+                      'text-xs',
+                      metadata.confidence >= 0.9
+                        ? 'text-green-600 dark:text-green-400'
+                        : metadata.confidence >= 0.7
+                        ? 'text-yellow-600 dark:text-yellow-400'
+                        : 'text-orange-600 dark:text-orange-400'
+                    )}
+                  >
+                    {Math.round(metadata.confidence * 100)}% Accurate
+                  </Text>
+                </View>
+              ) : null}
+            </View>
           </View>
         </View>
         {metadata?.confidence && metadata.confidence > 0.8 ? (

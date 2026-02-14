@@ -31,6 +31,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { router } from 'expo-router';
+import { useCreateScan, type ScanType } from '@/lib/api/scans';
 
 function cn(...classes: (string | undefined | false)[]) {
   return classes.filter(Boolean).join(' ');
@@ -55,6 +56,8 @@ export default function NarratorScreen() {
   const addStory = useNarratorStore((s) => s.addStory);
   const sharedContent = useNarratorStore((s) => s.sharedContent);
   const clearSharedContent = useNarratorStore((s) => s.clearSharedContent);
+
+  const createScan = useCreateScan();
 
   const [fontsLoaded] = useFonts({
     PlayfairDisplay_700Bold,
@@ -310,16 +313,45 @@ export default function NarratorScreen() {
     if (!text.trim()) return;
 
     const wordCount = words.length;
+    const title = fetchedURLTitle || text.slice(0, 50) + (text.length > 50 ? '...' : '');
+
+    // Save to local MMKV store
     addStory({
-      title: text.slice(0, 50) + (text.length > 50 ? '...' : ''),
+      title,
       content: text,
       category: 'personal',
       isFavorite: false,
       wordCount,
     });
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.push('/library');
+    // Determine scan type based on context
+    let scanType: ScanType = 'manual';
+    if (extractionPreview) {
+      scanType = 'ocr'; // From image extraction
+    } else if (fetchedURLTitle) {
+      scanType = 'web'; // From URL fetch
+    }
+
+    // Save to backend database
+    createScan.mutate({
+      type: scanType,
+      content: text,
+      originalUrl: fetchedURLTitle ? text : null,
+      metadata: {
+        title,
+        confidence: extractionPreview?.metadata?.confidence,
+      },
+    }, {
+      onSuccess: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.push('/library');
+      },
+      onError: () => {
+        // Still show success for local save even if backend fails
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.push('/library');
+      }
+    });
   };
 
   const importDocument = async () => {

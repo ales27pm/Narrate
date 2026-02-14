@@ -6,6 +6,7 @@ import { sampleRouter } from "./routes/sample";
 import { ocrRouter } from "./routes/ocr";
 import { pdfRouter } from "./routes/pdf";
 import { webRouter } from "./routes/web";
+import { scansRouter } from "./routes/scans";
 import { logger } from "hono/logger";
 
 const app = new Hono();
@@ -37,6 +38,7 @@ app.route("/api/sample", sampleRouter);
 app.route("/api/ocr", ocrRouter);
 app.route("/api/pdf", pdfRouter);
 app.route("/api/web", webRouter);
+app.route("/api/scans", scansRouter);
 
 const port = Number(process.env.PORT) || 3000;
 
